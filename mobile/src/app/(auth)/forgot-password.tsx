@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-export default function LoginScreen() {
+export default function ForgotPasswordScreen() {
   return (
     <View
       style={{
@@ -9,8 +9,7 @@ export default function LoginScreen() {
         alignItems: 'center',
       }}
     >
-      <Text>Climatización RG</Text>
-      <Text>Login</Text>
+      <Text>Recuperar contraseña</Text>
     </View>
   );
 }
