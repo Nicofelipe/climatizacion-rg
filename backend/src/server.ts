@@ -7,6 +7,8 @@ import helmet from 'helmet';
 import authRoutes from './routes/auth.routes';
 import healthRoutes from './routes/health.routes';
 
+import expenseRoutes from './routes/expense.routes';
+
 const app = express();
 
 const PORT = process.env.PORT ?? 3000;
@@ -16,6 +18,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/expenses', expenseRoutes);
 
 app.listen(PORT, () => {
   console.log(`API running on port ${PORT}`);
