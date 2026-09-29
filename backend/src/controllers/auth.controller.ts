@@ -13,11 +13,12 @@ export async function loginController(req: Request, res: Response) {
       return;
     }
 
-    const user = await loginService(email, password);
+    const result = await loginService(email, password);
 
     res.status(200).json({
       message: 'Login successful',
-      user,
+      user: result.user,
+      token: result.token,
     });
   } catch (error) {
     if (

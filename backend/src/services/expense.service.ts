@@ -1,59 +1,66 @@
 import { executeQuery } from '../database/sqlServer';
 
 interface CreateExpenseInput {
-  companyId: number;
-  userId: number;
-  expenseTypeId: number;
-  supplierId?: number | null;
-  receiptNumber: string;
-  expenseDate: string;
-  totalAmount: number;
-  description?: string | null;
+    companyId: number;
+    userId: number;
+    expenseTypeId: number;
+    supplierId?: number | null;
+    receiptNumber: string;
+    expenseDate: string;
+    totalAmount: number;
+    description?: string | null;
 }
 
 interface CreatedExpenseRow {
-  Id: number;
-  CompanyId: number;
-  UserId: number;
-  ExpenseTypeId: number;
-  SupplierId: number | null;
-  ReceiptNumber: string;
-  ExpenseDate: string;
-  NetAmount: number;
-  VatAmount: number;
-  TotalAmount: number;
-  Description: string | null;
-  Status: string;
-  CreatedAt: string;
+    Id: number;
+    CompanyId: number;
+    UserId: number;
+    ExpenseTypeId: number;
+    SupplierId: number | null;
+    ReceiptNumber: string;
+    ExpenseDate: string;
+    NetAmount: number;
+    VatAmount: number;
+    TotalAmount: number;
+    Description: string | null;
+    Status: string;
+    CreatedAt: string;
 }
 
 interface ExpenseListRow {
-  Id: number;
-  ReceiptNumber: string;
-  ExpenseDate: string;
-  ExpenseTypeId: number;
-  ExpenseTypeName: string;
-  SupplierId: number | null;
-  SupplierName: string | null;
-  NetAmount: number;
-  VatAmount: number;
-  TotalAmount: number;
-  Description: string | null;
-  Status: string;
-  CreatedAt: string;
+    Id: number;
+    ReceiptNumber: string;
+    ExpenseDate: string;
+    ExpenseTypeId: number;
+    ExpenseTypeName: string;
+    SupplierId: number | null;
+    SupplierName: string | null;
+    NetAmount: number;
+    VatAmount: number;
+    TotalAmount: number;
+    Description: string | null;
+    Status: string;
+    CreatedAt: string;
+
+    FileId: number | null;
+    FileProvider: string | null;
+    FileProviderFileId: string | null;
+    FileOriginalName: string | null;
+    FileMimeType: string | null;
+    FileSize: number | null;
 }
 
 export async function createExpense(input: CreateExpenseInput) {
-  const taxRate = 19;
+    const taxRate = 19;
 
-  const netAmount = Math.round(
-    input.totalAmount / (1 + taxRate / 100)
-  );
+    const netAmount = Math.round(
+        input.totalAmount / (1 + taxRate / 100)
+    );
 
-  const vatAmount = input.totalAmount - netAmount;
+    const vatAmount = input.totalAmount - netAmount;
 
-  const rows = await executeQuery<CreatedExpenseRow>(
-    `
+    const rows = await executeQuery<CreatedExpenseRow>(
+        `
       INSERT INTO dbo.Expense
       (
         CompanyId,
@@ -99,27 +106,27 @@ export async function createExpense(input: CreateExpenseInput) {
         ?
       );
     `,
-    [
-      input.companyId,
-      input.userId,
-      input.expenseTypeId,
-      input.supplierId ?? null,
-      input.receiptNumber,
-      input.expenseDate,
-      taxRate,
-      netAmount,
-      vatAmount,
-      input.totalAmount,
-      input.description ?? null,
-    ]
-  );
+        [
+            input.companyId,
+            input.userId,
+            input.expenseTypeId,
+            input.supplierId ?? null,
+            input.receiptNumber,
+            input.expenseDate,
+            taxRate,
+            netAmount,
+            vatAmount,
+            input.totalAmount,
+            input.description ?? null,
+        ]
+    );
 
-  return rows[0];
+    return rows[0];
 }
 
 export async function getExpenses(companyId: number) {
-  return executeQuery<ExpenseListRow>(
-    `
+    return executeQuery<ExpenseListRow>(
+        `
       SELECT
         e.Id,
         e.ReceiptNumber,
@@ -143,16 +150,16 @@ export async function getExpenses(companyId: number) {
         AND e.IsDeleted = 0
       ORDER BY e.ExpenseDate DESC, e.Id DESC;
     `,
-    [companyId]
-  );
+        [companyId]
+    );
 }
 
 export async function getExpenseById(
-  companyId: number,
-  expenseId: number
+    companyId: number,
+    expenseId: number
 ) {
-  const rows = await executeQuery<ExpenseListRow>(
-    `
+    const rows = await executeQuery<ExpenseListRow>(
+        `
       SELECT
         e.Id,
         e.ReceiptNumber,
@@ -166,44 +173,91 @@ export async function getExpenseById(
         e.TotalAmount,
         e.Description,
         e.Status,
-        e.CreatedAt
+        e.CreatedAt,
+
+        f.Id AS FileId,
+        f.Provider AS FileProvider,
+        f.ProviderFileId AS FileProviderFileId,
+        f.OriginalFileName AS FileOriginalName,
+        f.MimeType AS FileMimeType,
+        f.FileSize AS FileSize
+
       FROM dbo.Expense AS e
+
       INNER JOIN dbo.ExpenseType AS et
         ON et.Id = e.ExpenseTypeId
+
       LEFT JOIN dbo.Supplier AS s
         ON s.Id = e.SupplierId
+
+      LEFT JOIN dbo.[File] AS f
+        ON f.EntityType = N'EXPENSE'
+        AND f.EntityId = e.Id
+        AND f.CompanyId = e.CompanyId
+
       WHERE e.Id = ?
         AND e.CompanyId = ?
         AND e.IsDeleted = 0;
     `,
-    [expenseId, companyId]
-  );
+        [expenseId, companyId]
+    );
 
-  return rows[0] ?? null;
+    const row = rows[0];
+
+    if (!row) {
+        return null;
+    }
+
+    return {
+        Id: row.Id,
+        ReceiptNumber: row.ReceiptNumber,
+        ExpenseDate: row.ExpenseDate,
+        ExpenseTypeId: row.ExpenseTypeId,
+        ExpenseTypeName: row.ExpenseTypeName,
+        SupplierId: row.SupplierId,
+        SupplierName: row.SupplierName,
+        NetAmount: row.NetAmount,
+        VatAmount: row.VatAmount,
+        TotalAmount: row.TotalAmount,
+        Description: row.Description,
+        Status: row.Status,
+        CreatedAt: row.CreatedAt,
+
+        file: row.FileId
+            ? {
+                Id: row.FileId,
+                Provider: row.FileProvider,
+                ProviderFileId: row.FileProviderFileId,
+                OriginalFileName: row.FileOriginalName,
+                MimeType: row.FileMimeType,
+                FileSize: row.FileSize,
+            }
+            : null,
+    };
 }
 
 interface UpdateExpenseInput {
-  companyId: number;
-  expenseId: number;
-  expenseTypeId: number;
-  supplierId?: number | null;
-  receiptNumber: string;
-  expenseDate: string;
-  totalAmount: number;
-  description?: string | null;
+    companyId: number;
+    expenseId: number;
+    expenseTypeId: number;
+    supplierId?: number | null;
+    receiptNumber: string;
+    expenseDate: string;
+    totalAmount: number;
+    description?: string | null;
 }
 
 export async function updateExpense(input: UpdateExpenseInput) {
-  const taxRate = 19;
+    const taxRate = 19;
 
-  const netAmount = Math.round(
-    input.totalAmount / (1 + taxRate / 100)
-  );
+    const netAmount = Math.round(
+        input.totalAmount / (1 + taxRate / 100)
+    );
 
-  const vatAmount = input.totalAmount - netAmount;
+    const vatAmount = input.totalAmount - netAmount;
 
-  const rows = await executeQuery<ExpenseListRow>(
-    `
+    const rows = await executeQuery<ExpenseListRow>(
+        `
       UPDATE dbo.Expense
       SET
         ExpenseTypeId = ?,
@@ -232,30 +286,30 @@ export async function updateExpense(input: UpdateExpenseInput) {
         AND CompanyId = ?
         AND IsDeleted = 0;
     `,
-    [
-      input.expenseTypeId,
-      input.supplierId ?? null,
-      input.receiptNumber,
-      input.expenseDate,
-      taxRate,
-      netAmount,
-      vatAmount,
-      input.totalAmount,
-      input.description ?? null,
-      input.expenseId,
-      input.companyId,
-    ]
-  );
+        [
+            input.expenseTypeId,
+            input.supplierId ?? null,
+            input.receiptNumber,
+            input.expenseDate,
+            taxRate,
+            netAmount,
+            vatAmount,
+            input.totalAmount,
+            input.description ?? null,
+            input.expenseId,
+            input.companyId,
+        ]
+    );
 
-  return rows[0] ?? null;
+    return rows[0] ?? null;
 }
 
 export async function deleteExpense(
-  companyId: number,
-  expenseId: number
+    companyId: number,
+    expenseId: number
 ) {
-  const rows = await executeQuery<{ Id: number }>(
-    `
+    const rows = await executeQuery<{ Id: number }>(
+        `
       UPDATE dbo.Expense
       SET
         IsDeleted = 1,
@@ -266,8 +320,8 @@ export async function deleteExpense(
         AND CompanyId = ?
         AND IsDeleted = 0;
     `,
-    [expenseId, companyId]
-  );
+        [expenseId, companyId]
+    );
 
-  return rows[0] ?? null;
+    return rows[0] ?? null;
 }

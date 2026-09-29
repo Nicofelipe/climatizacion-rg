@@ -1,26 +1,25 @@
-import { Text } from "react-native";
+import { Text, View } from 'react-native';
 
-import AppContainer from "@/components/layout/AppContainer";
+import styles from '@/components/common/Dashboard.styles';
+import AppContainer from '@/components/layout/AppContainer';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Dashboard() {
+  const { user } = useAuth();
+
   return (
     <AppContainer>
-      <Text
-        style={{
-          fontSize: 28,
-          fontWeight: "700",
-        }}
-      >
+      <Text style={styles.title}>
         Climatización RG
       </Text>
 
-      <Text
-        style={{
-          marginTop: 10,
-        }}
-      >
-        Bienvenido 👋
+      <Text style={styles.subtitle}>
+        Bienvenido, {user?.firstName ?? 'Usuario'} 👋
       </Text>
+
+      <View style={styles.cardsContainer}>
+        {/* Próximamente conectaremos aquí los datos reales del dashboard */}
+      </View>
     </AppContainer>
   );
 }

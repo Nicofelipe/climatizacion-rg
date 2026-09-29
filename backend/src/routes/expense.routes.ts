@@ -8,6 +8,7 @@ import {
     updateExpenseController
 } from '../controllers/expense.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
+import { uploadReceiptImage } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -15,7 +16,12 @@ router.get('/', authenticateToken, getExpensesController);
 
 router.get('/:id', authenticateToken, getExpenseByIdController);
 
-router.post('/', authenticateToken, createExpenseController);
+router.post(
+    '/',
+    authenticateToken,
+    uploadReceiptImage.single('image'),
+    createExpenseController
+);
 
 router.put('/:id', authenticateToken, updateExpenseController);
 

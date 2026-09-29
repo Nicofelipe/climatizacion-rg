@@ -44,3 +44,5 @@ example
 
 # Entorno
 .env
+
+backend/uploads/
