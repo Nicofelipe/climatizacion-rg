@@ -11,8 +11,9 @@ try {
   $pointer=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
   $appPassword=([Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) -replace '\s','')
   if($appPassword -notmatch '^[A-Za-z]{16}$'){throw 'La contraseña de aplicación debe tener 16 letras; los espacios se quitan automáticamente.'}
-  $settings=[ordered]@{SMTP_HOST='smtp.gmail.com';SMTP_PORT='587';SMTP_SECURE='false';SMTP_USER=$Email.ToLowerInvariant();SMTP_FROM=$Email.ToLowerInvariant();SMTP_PASSWORD=$appPassword;PASSWORD_RESET_URL='http://localhost:8081/reset-password'}
+  $settings=[ordered]@{SMTP_HOST='smtp.gmail.com';SMTP_PORT='587';SMTP_SECURE='false';SMTP_USER=$Email.ToLowerInvariant();SMTP_FROM=$Email.ToLowerInvariant();SMTP_PASSWORD=$appPassword}
   $envText=[IO.File]::ReadAllText($envPath)
+  if($envText -notmatch '(?m)^PASSWORD_RESET_URL=.+'){$settings['PASSWORD_RESET_URL']='http://localhost:8081/reset-password'}
   foreach($setting in $settings.GetEnumerator()){
     $pattern='(?m)^'+[regex]::Escape($setting.Key)+'=.*$'
     $line=$setting.Key+'='+$setting.Value

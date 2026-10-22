@@ -4,7 +4,7 @@ Trabajadores y supervisores pueden usar **Olvidé mi contraseña** en el login o
 
 ## Configuración del envío
 
-El usuario configuró Gmail localmente y confirmó la recepción de un correo de recuperación. El enlace actual es local; falta validar el cambio completo desde una dirección pública. Ver [Publicar y probar en Android](PUBLICAR-Y-PROBAR-ANDROID.md). Las credenciales permanecen exclusivamente en backend/.env.
+El usuario configuró Gmail localmente, confirmó la recepción del correo y después confirmó que la recuperación con la dirección pública funcionó. Los nuevos enlaces apuntan a https://climatizacion-rg-pruebas.onrender.com/reset-password. Ver [Publicar y probar en Android](PUBLICAR-Y-PROBAR-ANDROID.md). Las credenciales permanecen exclusivamente en backend/.env.
 
 Para habilitarlo, configurar localmente en backend/.env, sin subir secretos a Git:
 

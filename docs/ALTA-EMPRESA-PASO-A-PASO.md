@@ -10,6 +10,8 @@ El remitente de recuperación pertenece a la instalación de la aplicación: hoy
 
 El responsable técnico crea el registro de empresa y su primer administrador en SQL Server, siguiendo el esquema actual y los procedimientos de alta existentes. Todavía no existe una pantalla de alta de empresas: no basta con registrarla como trabajador. No ejecutar semillas de prueba sobre datos de clientes. Registrar la intervención y el CompanyId asignado.
 
+El comando seed:admin actual está fijado a CompanyId=1 y RoleId=1: no sirve para incorporar automáticamente una segunda empresa. Esa alta requiere un procedimiento técnico específico, con hash de contraseña y auditoría; esta guía no presenta ese proceso como automatizado.
+
 ## 3. Preparar Google Cloud
 
 Usar el proyecto OAuth de la aplicación. Habilitar Drive API y conservar el cliente web, sus secretos privados y ambos callbacks: `/api/storage/google-drive/callback` y `/api/auth/google/callback`, con el dominio HTTPS del backend. Durante las pruebas OAuth, agregar los correos Google que deban autorizar Drive o iniciar sesión como usuarios de prueba.

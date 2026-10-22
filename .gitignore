@@ -16,3 +16,6 @@ backend/uploads/
 
 # Expo
 **/.expo/
+
+# Local build artifacts and downloaded tools
+artifacts/
