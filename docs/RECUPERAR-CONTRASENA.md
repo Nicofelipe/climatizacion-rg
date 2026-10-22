@@ -2,9 +2,9 @@
 
 Trabajadores y supervisores pueden usar **Olvidé mi contraseña** en el login o **Recuperar contraseña por correo** en Perfil. No necesitan la intervención de otro supervisor. El enlace dura 20 minutos y es de un solo uso. La nueva contraseña y su confirmación usan la misma regla de registro y cambio: mínimo ocho caracteres, mayúscula, minúscula y número. Las diferencias aparecen en un aviso rojo.
 
-## Envío pendiente de configurar
+## Configuración del envío
 
-El usuario decidió definir el proveedor después. No se han configurado credenciales SMTP ni enviado correos de prueba. La aplicación muestra claramente que el servicio aún no está configurado, en vez de afirmar que envió un mensaje.
+El usuario configuró Gmail localmente y confirmó la recepción de un correo de recuperación. El enlace actual es local; falta validar el cambio completo desde una dirección pública. Ver [Publicar y probar en Android](PUBLICAR-Y-PROBAR-ANDROID.md). Las credenciales permanecen exclusivamente en backend/.env.
 
 Para habilitarlo, configurar localmente en backend/.env, sin subir secretos a Git:
 
