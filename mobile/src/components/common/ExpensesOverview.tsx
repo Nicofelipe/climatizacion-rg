@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ExpenseStatus from './ExpenseStatus';
+import ExpenseScopeSelector from './ExpenseScopeSelector';
+import ReceiptDateFilter from './ReceiptDateFilter';
+import { requestJson } from '@/api/http';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Colors } from '@/theme';
@@ -26,30 +29,59 @@ export default function ExpensesOverview() {
   const { expenses, isLoading, error, reload } = useExpenses(token);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
+  const params=useLocalSearchParams<{workerId?:string;view?:string;review?:string}>();
+  const [scope,setScope]=useState<'company'|'personal'>('company');
+  const [worker,setWorker]=useState('');
+  const [choosingWorker,setChoosingWorker]=useState(false);
+  const [people,setPeople]=useState<{Id:number;FirstName:string;LastName:string}[]>([]);
+  const [from,setFrom]=useState('');const [to,setTo]=useState('');
+  const [adminCount,setAdminCount]=useState<number|null>(null);
+  const [reviewOnly,setReviewOnly]=useState(false);
+  useEffect(()=>{if(params.workerId){setWorker(params.workerId);setScope('company');}},[params.workerId]);
+  useEffect(()=>{if(params.view==='company'||params.view==='personal'){setScope(params.view);setWorker('');}},[params.view]);
+  useEffect(()=>{if(params.review){setScope('company');setWorker('');setStatus('PENDING');setSearch('');setFrom('');setTo('');setReviewOnly(true);}},[params.review]);
+  useFocusEffect(useCallback(()=>{let active=true;if(user?.role==='ADMIN'&&token){
+    requestJson(`${process.env.EXPO_PUBLIC_API_URL}/users`,{headers:{Authorization:`Bearer ${token}`}}).then(result=>{if(active)setPeople(result.employees);}).catch(()=>{});
+    requestJson(`${process.env.EXPO_PUBLIC_API_URL}/users/approval-policy`,{headers:{Authorization:`Bearer ${token}`}}).then(result=>{if(active)setAdminCount(result.adminCount);}).catch(()=>{});
+  }return()=>{active=false;};},[token,user?.role]));
+  const validDate=(value:string)=>!value||(/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value);
+  const dateError=!validDate(from)||!validDate(to)?'Usa fechas válidas con formato AAAA-MM-DD.':from&&to&&from>to?'La fecha desde debe ser anterior o igual a hasta.':'';
+  const selectedPerson=people.find(person=>String(person.Id)===worker);
+  const workerLabel=selectedPerson?`${selectedPerson.FirstName} ${selectedPerson.LastName}`:worker?(expenses.find(item=>String(item.UserId)===worker)?.UserName??'Integrante seleccionado'):'Todos los integrantes';
+  const scoped=useMemo(()=>expenses.filter(item=>user?.role!=='ADMIN'||(scope==='personal'?item.UserId===user.id:!worker||String(item.UserId)===worker)),[expenses,user?.role,user?.id,scope,worker]);
   const visible = useMemo(() => {
     const text = search.trim().toLocaleLowerCase('es');
-    return expenses.filter(item => (status === 'ALL' || item.Status === status) &&
-      (!text || `${item.ReceiptNumber} ${item.ExpenseTypeName}`.toLocaleLowerCase('es').includes(text)));
-  }, [expenses, status, search]);
-  const pending = expenses.filter(item => item.Status === 'PENDING').length;
-  const approved = expenses.filter(item => item.Status === 'APPROVED').length;
+    return scoped.filter(item => (!reviewOnly||item.UserId!==user?.id||adminCount===1) && !dateError && (!from||item.ExpenseDate.slice(0,10)>=from)&&(!to||item.ExpenseDate.slice(0,10)<=to)&&(status === 'ALL' || item.Status === status) &&
+      (!text || `${item.ReceiptNumber} ${item.ExpenseTypeName} ${item.UserName??''}`.toLocaleLowerCase('es').includes(text)));
+  }, [scoped, status, search,from,to,dateError,reviewOnly,user?.id,adminCount]);
+  const pending = scoped.filter(item => item.Status === 'PENDING').length;
+  const approved = scoped.filter(item => item.Status === 'APPROVED').length;
 
   return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
     <FlatList data={visible} keyExtractor={item => String(item.Id)} refreshing={isLoading} onRefresh={reload}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       ListHeaderComponent={<View style={{ gap: 22, marginBottom: 16 }}>
         <View style={styles.row}>
-          <View style={{ flex: 1 }}><Text style={styles.eyebrow}>BOLETAS Y RESPALDOS</Text><Text style={styles.title}>{user?.role === 'ADMIN' ? 'Boletas de tu empresa' : 'Mis boletas'}</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.eyebrow}>BOLETAS Y RESPALDOS</Text><Text style={styles.title}>{user?.role === 'ADMIN'&&scope==='company' ? 'Boletas de tu empresa' : 'Mis boletas'}</Text></View>
           <View style={styles.headerIcon}><Ionicons name="receipt-outline" size={25} color={Colors.primary} /></View>
         </View>
         <Text style={styles.subtitle}>{user?.role === 'ADMIN' ? 'Consulta, revisa y mantén cada gasto en orden.' : 'Cada gasto, su historia. Cada boleta, su respaldo.'}</Text>
+        {user?.role==='ADMIN'?<><ExpenseScopeSelector value={scope} onChange={setScope}/><Pressable accessibilityRole="button" onPress={()=>router.push('/(protected)/(tabs)/employees')}><Text style={styles.link}>Equipo y rendiciones →</Text></Pressable><Text style={styles.sort}>{adminCount===1?'Eres el único administrador activo: tus nuevas boletas se aprueban al guardar su respaldo.':adminCount!==null?'Tus boletas deben ser revisadas por otro administrador activo.':'La política de aprobación se comprueba al guardar y revisar.'}</Text></>:null}
         <View style={styles.summary}>
-          <View style={{ flex: 1 }}><Text style={styles.summaryLabel}>TODO TU REGISTRO</Text><Text style={styles.summaryNumber}>{isLoading && !expenses.length ? '…' : expenses.length}</Text><Text style={styles.summaryHint}>boletas registradas</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.summaryLabel}>REGISTRO DEL ALCANCE ELEGIDO</Text><Text style={styles.summaryNumber}>{isLoading && !expenses.length ? '…' : scoped.length}</Text><Text style={styles.summaryHint}>boletas registradas · todos los períodos</Text></View>
           <View style={styles.summarySide}><Text style={styles.summarySideNumber}>{pending}</Text><Text style={styles.summaryHint}>pendientes</Text><View style={{ height: 8 }} /><Text style={styles.summarySideNumber}>{approved}</Text><Text style={styles.summaryHint}>aprobadas</Text></View>
         </View>
         <Pressable accessibilityRole="button" style={styles.primary} onPress={() => router.push('/(protected)/expenses/create')}><Ionicons name="add-circle-outline" size={21} color="white" /><Text style={styles.primaryText}>Registrar una boleta</Text></Pressable>
+        <View style={styles.filterPanel}>
+        <Text style={styles.filterHeading}>Filtrar boletas</Text>
+        {user?.role==='ADMIN'?<View>{scope==='company'?<Pressable accessibilityRole="button" style={styles.search} onPress={()=>setChoosingWorker(true)}><Ionicons name="people-outline" size={20} color={Colors.primary}/><Text style={styles.filterText}>{workerLabel}</Text><Ionicons name="chevron-down" size={17} color={Colors.primary}/></Pressable>:null}</View>:null}
         <View style={styles.search}><Ionicons name="search-outline" size={19} color={Colors.textSecondary} /><TextInput accessibilityLabel="Buscar boletas" placeholder="Buscar por número o tipo de gasto" placeholderTextColor={Colors.textSecondary} value={search} onChangeText={setSearch} style={styles.searchInput} />{search ? <Pressable accessibilityRole="button" accessibilityLabel="Limpiar búsqueda" onPress={() => setSearch('')}><Ionicons name="close-circle" size={19} color={Colors.textSecondary} /></Pressable> : null}</View>
-        <View style={styles.filters}>{filters.map(filter => <Pressable key={filter.value} accessibilityRole="button" accessibilityState={{ selected: status === filter.value }} onPress={() => setStatus(filter.value)} style={[styles.filter, status === filter.value && styles.selectedFilter]}><Text style={[styles.filterText, status === filter.value && { color: Colors.primary }]}>{filter.label}</Text></Pressable>)}</View>
+        {reviewOnly?<Text style={{color:'#B94141',fontSize:12,fontWeight:'600'}}>Mostrando pendientes que puedes revisar</Text>:null}
+        <View style={styles.filters}>{filters.map(filter => <Pressable key={filter.value} accessibilityRole="button" accessibilityState={{ selected: status === filter.value }} onPress={() => {setStatus(filter.value);setReviewOnly(false);}} style={[styles.filter, status === filter.value && styles.selectedFilter,{flexDirection:'row',alignItems:'center',gap:6}]}><Text style={[styles.filterText, status === filter.value && { color: Colors.primary }]}>{filter.label}</Text>{filter.value==='PENDING'&&pending>0?<View accessibilityLabel={`${pending} pendientes`} style={{backgroundColor:'#DC2626',borderRadius:10,minWidth:18,paddingHorizontal:4,paddingVertical:1}}><Text style={{color:'white',fontSize:10,fontWeight:'700',textAlign:'center'}}>{pending>99?'99+':pending}</Text></View>:null}</Pressable>)}</View>
+        <Text style={styles.sort}>Fecha de la boleta</Text><View style={[styles.row,{flexWrap:'wrap'}]}><ReceiptDateFilter label="Desde" value={from} onChange={setFrom}/><ReceiptDateFilter label="Hasta" value={to} onChange={setTo}/></View>
+        {dateError?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{dateError}</Text>:null}
+        {(from||to||worker||search||status!=='ALL')?<Pressable accessibilityRole="button" onPress={()=>{setFrom('');setTo('');setWorker('');setSearch('');setStatus('ALL');setReviewOnly(false);router.setParams({workerId:undefined});}}><Text style={styles.link}>Limpiar filtros</Text></Pressable>:null}
+        </View>
         <View style={styles.row}><Text style={styles.resultCount}>{visible.length} resultado{visible.length !== 1 ? 's' : ''}</Text><Text style={styles.sort}>Más recientes primero</Text></View>
         {error ? <View style={styles.error}><Text accessibilityRole="alert" style={{ color: '#991B1B' }}>{error}</Text><Pressable onPress={reload} accessibilityRole="button"><Text style={styles.link}>Reintentar →</Text></Pressable></View> : null}
       </View>}
@@ -63,12 +95,16 @@ export default function ExpensesOverview() {
           <ExpenseStatus status={item.Status} />
         </View>
         {item.Description ? <Text numberOfLines={1} style={styles.description}>{item.Description}</Text> : null}
+        {user?.role==='ADMIN'?<Text style={styles.description}>{item.UserId===user.id?'Mi boleta':item.UserName}</Text>:null}
         <View style={styles.cardFooter}><View style={styles.date}><Ionicons name="calendar-outline" size={14} color={Colors.textSecondary} /><Text style={styles.dateText}>{item.ExpenseDate.slice(0, 10).split('-').reverse().join('/')}</Text></View><View style={styles.date}><Text style={styles.amount}>{formatCurrency(item.TotalAmount)}</Text><Ionicons name="chevron-forward" size={18} color={Colors.primary} /></View></View>
       </Pressable>} />
+    <Modal visible={choosingWorker} transparent animationType="fade" onRequestClose={()=>setChoosingWorker(false)}><View style={{flex:1,backgroundColor:'#17233D88',justifyContent:'center',padding:22}}><View style={{backgroundColor:'white',borderRadius:22,padding:22,gap:16,maxHeight:'80%'}}><Text style={styles.emptyTitle}>Filtrar por integrante</Text><ScrollView><Pressable accessibilityRole="button" onPress={()=>{setWorker('');setChoosingWorker(false);}} style={{padding:15}}><Text style={styles.link}>Todos los integrantes</Text></Pressable>{people.map(person=><Pressable key={person.Id} accessibilityRole="button" onPress={()=>{setWorker(String(person.Id));setChoosingWorker(false);}} style={{padding:15}}><Text style={styles.filterText}>{person.FirstName} {person.LastName}{person.Id===user?.id?' · Yo':''}</Text></Pressable>)}</ScrollView><Pressable accessibilityRole="button" onPress={()=>setChoosingWorker(false)}><Text style={styles.link}>Cerrar</Text></Pressable></View></View></Modal>
   </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
+  filterPanel:{backgroundColor:'#EDF3F7',padding:16,borderRadius:18,gap:13,borderWidth:1,borderColor:Colors.border},
+  filterHeading:{fontSize:14,fontWeight:'700',color:Colors.text},
   page: { flex: 1, backgroundColor: Colors.background },
   content: { width: '100%', maxWidth: 900, alignSelf: 'center', padding: 20, paddingBottom: 36 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

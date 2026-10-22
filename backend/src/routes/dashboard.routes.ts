@@ -8,11 +8,13 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
   if (!req.user) { res.status(401).json({ message: 'Debes iniciar sesión.' }); return; }
   const month = req.query.month ?? currentChileMonth();
   const mode = req.query.mode ?? 'month';
+  const scope=req.query.scope??'company';
+  if(scope!=='personal'&&scope!=='company'){res.status(400).json({message:'Selecciona un alcance válido.'});return;}
   if (typeof month !== 'string' || !/^(20\d{2})-(0[1-9]|1[0-2])$/.test(month) || month > currentChileMonth() || (mode !== 'month' && mode !== 'year')) {
     res.status(400).json({ message: 'Selecciona un período válido hasta el mes actual.' }); return;
   }
   try {
-    const data = await getDashboard(req.user.companyId, req.user.userId, req.user.role, month, mode);
+    const data = await getDashboard(req.user.companyId, req.user.userId, req.user.role, month, mode,scope);
     res.json(data);
   } catch {
     res.status(503).json({ message: 'No fue posible cargar tu resumen. Inténtalo nuevamente.' });

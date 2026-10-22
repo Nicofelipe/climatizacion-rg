@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DashboardPeriodSelector from './DashboardPeriodSelector';
 import { ExpenseDonut, ExpenseLine, percent } from './ReportCharts';
+import ExpenseScopeSelector from './ExpenseScopeSelector';
 import { availablePeriodOptions } from '@/utils/periodOptions';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,7 +23,8 @@ export default function ReportsOverview() {
   const [period, setPeriod] = useState(() => availablePeriodOptions(0).currentPeriod);
   const [mode, setMode] = useState<'month' | 'year'>('month');
   const [chartMode, setChartMode] = useState<'daily' | 'monthly'>('daily');
-  const { data, loading, error, reload } = useExpenseDashboard(token, period, mode);
+  const [scope,setScope]=useState<'personal'|'company'>('company');
+  const { data, loading, error, reload } = useExpenseDashboard(token, period, mode,scope);
   const wide = useWindowDimensions().width >= 900;
   const approved = data?.states.find(item => item.status === 'APPROVED');
   const counted = data?.states.filter(item => item.status !== 'REJECTED').reduce((sum, item) => sum + item.count, 0) ?? 0;
@@ -36,9 +38,10 @@ export default function ReportsOverview() {
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor={Colors.primary} />}>
       <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.eyebrow}>TUS NÚMEROS, CON CLARIDAD</Text><Text style={styles.title}>Reportes</Text></View><View style={styles.headerIcon}><Ionicons name="analytics-outline" size={27} color={Colors.primary} /></View></View>
       <Text style={styles.subtitle}>{user?.role === 'ADMIN' ? 'Una mirada completa a los gastos de tu empresa.' : 'Entiende cómo se distribuyen tus gastos y cómo cambian en el tiempo.'}</Text>
+      {user?.role==='ADMIN'?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}
       <View style={[styles.row, { alignItems: 'flex-start', flexWrap: 'wrap', gap: 18 }]}>
         <View style={{ gap: 12 }}><View style={styles.segment}>{([{ value: 'month', label: 'Mensual' }, { value: 'year', label: 'Anual' }] as const).map(item => <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === item.value }} key={item.value} onPress={() => setMode(item.value)} style={[styles.segmentOption, mode === item.value && { backgroundColor: 'white' }]}><Text style={{ color: mode === item.value ? Colors.primary : Colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{item.label}</Text></Pressable>)}</View><DashboardPeriodSelector value={period} onChange={setPeriod} hideMonth={mode === 'year'} /></View>
-        <View style={styles.scope}><Ionicons name={user?.role === 'ADMIN' ? 'people-outline' : 'person-outline'} size={14} color={Colors.primary} /><Text style={styles.scopeText}>{user?.role === 'ADMIN' ? 'Solo tu empresa' : 'Solo tus boletas'}</Text></View>
+        <View style={styles.scope}><Ionicons name={user?.role === 'ADMIN'&&scope==='company' ? 'people-outline' : 'person-outline'} size={14} color={Colors.primary} /><Text style={styles.scopeText}>{user?.role === 'ADMIN'&&scope==='company' ? 'Toda tu empresa, incluyéndote' : 'Solo tus boletas'}</Text></View>
       </View>
       {error ? <View style={styles.panel}><Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{error}</Text><Pressable onPress={reload} accessibilityRole="button"><Text style={styles.link}>Reintentar →</Text></Pressable></View> : null}
       {loading ? <View style={styles.panel}><ActivityIndicator color={Colors.primary} /><Text style={styles.subtitle}>Preparando tus gráficos…</Text></View> : data ? <>

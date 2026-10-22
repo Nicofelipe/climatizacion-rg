@@ -24,6 +24,7 @@ export function useExpenses(token: string | null) {
 
       setExpenses(data);
     } catch (err) {
+      setExpenses([]);
       setError(
         err instanceof Error
           ? err.message

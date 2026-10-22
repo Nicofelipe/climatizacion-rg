@@ -23,6 +23,14 @@ const receipts = [
   expense(4, '2026-09-30', 'APPROVED', 75),
   expense(5, '2026-11-01', 'PENDING', 10000),
 ];
+test('administrator personal report uses owner scope and company report uses company scope',async()=>{
+  const personal=await getDashboard(3,5,'ADMIN','2026-10','month','personal');
+  assert.equal(personal.scope,'personal');assert.deepEqual(scope,[3,5,'EMPLOYEE']);
+  const company=await getDashboard(3,5,'ADMIN','2026-10','month','company');
+  assert.equal(company.scope,'company');assert.deepEqual(scope,[3,5,'ADMIN']);
+  const employee=await getDashboard(3,6,'EMPLOYEE','2026-10','month','company');
+  assert.equal(employee.scope,'personal');assert.deepEqual(scope,[3,6,'EMPLOYEE']);
+});
 test('monthly totals exclude rejected receipts but show their count and amount', () => {
   const summary = summarizeExpenses(receipts, '2026-10');
   assert.equal(summary.total, 150);

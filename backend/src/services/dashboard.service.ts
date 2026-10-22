@@ -70,10 +70,11 @@ export function summarizeExpenses(expenses: DashboardExpense[], month: string, m
   };
 }
 
-export async function getDashboard(companyId: number, userId: number, role: string, month: string, mode: 'month' | 'year' = 'month') {
+export async function getDashboard(companyId: number, userId: number, role: string, month: string, mode: 'month' | 'year' = 'month', scope: 'personal' | 'company' = 'company') {
   const companies = await executeQuery<{ Name: string }>('SELECT Name FROM dbo.Company WHERE Id = ? AND IsActive = 1;', [companyId]);
   if (!companies[0]) throw new Error('COMPANY_UNAVAILABLE');
-  const expenses = await getExpenses(companyId, userId, role);
-  return { companyName: companies[0].Name, scope: role === 'ADMIN' ? 'company' : 'personal',
+  const companyScope=role==='ADMIN' && scope==='company';
+  const expenses = await getExpenses(companyId, userId, companyScope ? 'ADMIN' : 'EMPLOYEE');
+  return { companyName: companies[0].Name, scope: companyScope ? 'company' : 'personal',
     generatedAt: new Date().toISOString(), ...summarizeExpenses(expenses, month, mode) };
 }

@@ -28,6 +28,8 @@ interface CreatedExpenseRow {
 }
 
 interface ExpenseListRow {
+  UserName: string;
+  CanReview: boolean;
   DriveSyncPending: boolean;
   ReviewedAt: string | null;
   ReviewedByName: string | null;
@@ -117,7 +119,8 @@ export async function createExpense(input: CreateExpenseInput) {
         NetAmount,
         VatAmount,
         TotalAmount,
-        Description
+        Description,
+        Status
       )
       OUTPUT
         INSERTED.Id,
@@ -146,7 +149,8 @@ export async function createExpense(input: CreateExpenseInput) {
         ?,
         ?,
         ?,
-        ?
+        ?,
+        N'PENDING'
       );
     `,
     [
@@ -179,6 +183,7 @@ export async function getExpenses(
       SELECT
         e.Id,
         e.UserId,
+        owner.FirstName + N' ' + owner.LastName AS UserName,
         e.ReceiptNumber,
         e.ExpenseDate,
         e.ExpenseTypeId,
@@ -192,6 +197,7 @@ export async function getExpenses(
         e.Status,
         e.CreatedAt
       FROM dbo.Expense AS e
+      INNER JOIN dbo.AppUser owner ON owner.Id=e.UserId AND owner.CompanyId=e.CompanyId
       INNER JOIN dbo.ExpenseType AS et
         ON et.Id = e.ExpenseTypeId
       LEFT JOIN dbo.Supplier AS s
@@ -220,6 +226,9 @@ export async function getExpenseById(
       SELECT
         e.Id,
         e.UserId,
+        owner.FirstName + N' ' + owner.LastName AS UserName,
+        CAST(CASE WHEN e.UserId<>? OR (SELECT COUNT(*) FROM dbo.AppUser approver JOIN dbo.Role ar ON ar.Id=approver.RoleId
+          WHERE approver.CompanyId=e.CompanyId AND approver.IsActive=1 AND ar.Name=N'ADMIN' AND ar.IsActive=1)=1 THEN 1 ELSE 0 END AS bit) AS CanReview,
         e.ReceiptNumber,
         e.ExpenseDate,
         e.ExpenseTypeId,
@@ -245,6 +254,7 @@ export async function getExpenseById(
         f.FileSize AS FileSize
 
       FROM dbo.Expense AS e
+      INNER JOIN dbo.AppUser owner ON owner.Id=e.UserId AND owner.CompanyId=e.CompanyId
 
       INNER JOIN dbo.ExpenseType AS et
         ON et.Id = e.ExpenseTypeId
@@ -265,6 +275,7 @@ export async function getExpenseById(
         AND (? = 1 OR e.UserId = ?);
         `,
       [
+        userId,
         expenseId,
         companyId,
         role === 'ADMIN' ? 1 : 0,
@@ -280,6 +291,9 @@ export async function getExpenseById(
 
   return {
     Id: row.Id,
+    UserId: row.UserId,
+    UserName: row.UserName,
+    CanReview: role==='ADMIN' && row.CanReview,
     DriveSyncPending: row.DriveSyncPending,
     ReviewedAt: row.ReviewedAt,
     ReviewedByName: row.ReviewedByName,

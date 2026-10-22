@@ -4,8 +4,13 @@ import { executeQuery } from '../database/sqlServer';
 
 export async function listEmployeesController(req:AuthenticatedRequest,res:Response){
   if(!req.user||req.user.role!=='ADMIN'){res.sendStatus(403);return;}
-  try{const employees=await executeQuery(`SELECT u.Id,u.FirstName,u.LastName,u.Email,u.Phone FROM dbo.AppUser u JOIN dbo.Role r ON r.Id=u.RoleId
-    WHERE u.CompanyId=? AND r.Name=N'EMPLOYEE' AND u.IsActive=1 ORDER BY u.FirstName,u.LastName,u.Id;`,[req.user.companyId]);res.setHeader('Cache-Control','no-store');res.json({employees});}
+  try{const employees=await executeQuery(`SELECT u.Id,u.FirstName,u.LastName,u.Email,u.Phone,r.Name AS Role,
+    (SELECT COUNT(*) FROM dbo.Expense e WHERE e.CompanyId=u.CompanyId AND e.UserId=u.Id AND e.IsDeleted=0) AS ReceiptCount,
+    (SELECT COUNT(*) FROM dbo.Expense e WHERE e.CompanyId=u.CompanyId AND e.UserId=u.Id AND e.IsDeleted=0 AND e.Status=N'PENDING') AS PendingCount,
+    (SELECT COUNT(*) FROM dbo.Expense e WHERE e.CompanyId=u.CompanyId AND e.UserId=u.Id AND e.IsDeleted=0 AND e.Status=N'APPROVED') AS ApprovedCount,
+    (SELECT COUNT(*) FROM dbo.Expense e WHERE e.CompanyId=u.CompanyId AND e.UserId=u.Id AND e.IsDeleted=0 AND e.Status=N'REJECTED') AS RejectedCount
+    FROM dbo.AppUser u JOIN dbo.Role r ON r.Id=u.RoleId
+    WHERE u.CompanyId=? AND r.Name IN(N'EMPLOYEE',N'ADMIN') AND u.IsActive=1 ORDER BY u.FirstName,u.LastName,u.Id;`,[req.user.companyId]);res.setHeader('Cache-Control','no-store');res.json({employees});}
   catch{res.status(500).json({message:'No fue posible cargar los trabajadores.'});}
 }
 export async function updateEmployeeController(req:AuthenticatedRequest,res:Response){

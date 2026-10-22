@@ -2,6 +2,8 @@ import { Platform } from 'react-native';
 import { requestJson } from './http';
 
 export interface Expense {
+    UserId: number;
+    UserName: string;
     Id: number;
     ReceiptNumber: string;
     ExpenseDate: string;
@@ -18,6 +20,7 @@ export interface Expense {
 }
 
 export interface ExpenseDetail extends Expense {
+    CanReview?: boolean;
     DriveSyncPending?: boolean;
   ReviewedAt: string | null;
   ReviewedByName: string | null;

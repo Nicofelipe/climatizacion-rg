@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { dashboardPalette } from './DashboardOverview.styles';
 import { formatCurrency } from '@/utils/currency';
 
 export const percent = (value: number, total: number) => total > 0 ? Math.round(value / total * 1000) / 10 : 0;
+const chartPress=(handler:()=>void)=>Platform.OS==='web'?{onClick:handler}:{onPress:handler};
 
 export function ExpenseDonut({ categories, total }: { categories: { name: string; amount: number; count: number }[]; total: number }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -22,7 +23,7 @@ export function ExpenseDonut({ categories, total }: { categories: { name: string
           const start = offset; offset += length;
           return <Circle key={category.name} cx={110} cy={110} r={radius} fill="none" stroke={dashboardPalette[index % dashboardPalette.length]}
             strokeWidth={selected === index ? 33 : 27} strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-start}
-            opacity={selected === null || selected === index ? 1 : 0.45} onPress={() => setSelected(selected === index ? null : index)} />;
+            opacity={selected === null || selected === index ? 1 : 0.45} {...chartPress(() => setSelected(selected === index ? null : index))} />;
         })}</G>
         <SvgText x={110} y={105} textAnchor="middle" fill="#17233D" fontSize={25} fontWeight="700">{active ? `${percent(active.amount, total)}%` : total > 0 ? '100%' : '0%'}</SvgText>
         <SvgText x={110} y={128} textAnchor="middle" fill="#64748B" fontSize={11}>{active ? 'del gasto del período' : 'gasto distribuido'}</SvgText>
@@ -54,7 +55,7 @@ export function ExpenseLine({ points }: { points: LinePoint[] }) {
       {points.map((point, index) => <G key={point.key}>
         {(index === 0 || index === points.length - 1 || index % Math.max(1, Math.ceil(points.length / 7)) === 0) ? <SvgText x={x(index)} y={210} fill="#7C899D" fontSize={10} textAnchor="middle">{point.label}</SvgText> : null}
         <Circle cx={x(index)} cy={y(point.amount)} r={selection === index ? 7 : points.length <= 12 ? 5 : 3.5} fill={selection === index ? '#17233D' : '#0D9488'} stroke="white" strokeWidth={1.5} />
-        <Rect x={x(index) - Math.max(6, 555 / Math.max(1, points.length) / 2)} y={12} width={Math.max(12, 555 / Math.max(1, points.length))} height={180} fill="transparent" onPress={() => setSelection(index)} />
+        <Rect x={x(index) - Math.max(6, 555 / Math.max(1, points.length) / 2)} y={12} width={Math.max(12, 555 / Math.max(1, points.length))} height={180} fill="transparent" {...chartPress(() => setSelection(index))} />
       </G>)}
     </Svg>
     <View style={{ backgroundColor: '#F4F8F8', borderRadius: 12, padding: 13, flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>

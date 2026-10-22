@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import styles, { dashboardPalette } from '@/components/common/DashboardOverview.styles';
 import ExpenseStatus from '@/components/common/ExpenseStatus';
 import DashboardPeriodSelector from '@/components/common/DashboardPeriodSelector';
+import ExpenseScopeSelector from '@/components/common/ExpenseScopeSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { formatCurrency } from '@/utils/currency';
@@ -26,12 +27,14 @@ export default function Dashboard() {
   const { user, token } = useAuth();
   const [month, setMonth] = useState(monthNow);
   const [mode, setMode] = useState<'month' | 'year'>('month');
-  const { data, loading, error, reload } = useExpenseDashboard(token, month, mode);
+  const [scope,setScope]=useState<'personal'|'company'>('company');
+  const { data, loading, error, reload } = useExpenseDashboard(token, month, mode,scope);
   const wide = useWindowDimensions().width >= 850;
   const admin = user?.role === 'ADMIN';
+  const companyView=admin&&scope==='company';
   const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase();
   const maxTrend = Math.max(1, ...(data?.trend.map(item => item.amount) ?? []));
-  const goExpenses = () => router.push('/(protected)/(tabs)/expenses');
+  const goExpenses = () => router.push({pathname:'/(protected)/(tabs)/expenses',params:{view:companyView?'company':'personal',workerId:undefined}});
   return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor="#0F8277" />}>
       <View style={styles.row}>
@@ -44,8 +47,9 @@ export default function Dashboard() {
 
       <View>
         <Text style={styles.greeting}>{user?.firstName?.trim() ? `Hola, ${user.firstName.trim()}.` : 'Hola.'}</Text>
-        <Text style={styles.subtitle}>{admin ? 'Una mirada clara a los gastos de tu empresa.' : 'Tus boletas en orden. Tu día, más simple.'}</Text>
+        <Text style={styles.subtitle}>{companyView ? 'Gastos de todos los integrantes de tu empresa, incluidos los tuyos.' : 'Este resumen incluye únicamente tus propias boletas.'}</Text>
       </View>
+      {admin?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}
       <View style={[styles.row, { flexWrap: 'wrap' }]}>
         <View style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', alignSelf: 'flex-start', padding: 4, backgroundColor: '#E9EEF7', borderRadius: 12, gap: 4 }}>
@@ -53,7 +57,7 @@ export default function Dashboard() {
           </View>
           <DashboardPeriodSelector value={month} onChange={setMonth} hideMonth={mode === 'year'} />
         </View>
-        <View style={styles.scope}><Ionicons name={admin ? 'people-outline' : 'person-outline'} size={14} color="#475569" /><Text style={styles.scopeText}>{admin ? 'Administrador · toda la empresa' : 'Trabajador · solo mis boletas'}</Text></View>
+        <View style={styles.scope}><Ionicons name={companyView ? 'people-outline' : 'person-outline'} size={14} color="#475569" /><Text style={styles.scopeText}>{companyView ? 'Resumen general · todos, incluyéndote' : 'Resumen personal · solo mis boletas'}</Text></View>
       </View>
 
       {error ? <View style={styles.panel}><Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{error}</Text><Pressable onPress={reload} accessibilityRole="button"><Text style={styles.link}>Volver a intentar →</Text></Pressable></View> : null}
@@ -62,7 +66,7 @@ export default function Dashboard() {
           <View style={[styles.hero, wide && { flex: 1.6 }]}>
             <View style={styles.heroOrb} />
             <View>
-              <Text style={styles.heroEyebrow}>{mode === 'year' ? 'GASTO REGISTRADO DEL AÑO' : 'GASTO REGISTRADO DEL MES'}</Text>
+              <Text style={styles.heroEyebrow}>{companyView?'GASTO DE TODA LA EMPRESA':'MI GASTO PERSONAL'} · {mode === 'year' ? 'ANUAL' : 'MENSUAL'}</Text>
               {mode === 'year' ? <Text style={[styles.heroHint, { textTransform: 'capitalize' }]}>{data.periodLabel}</Text> : null}
               <Text style={[styles.total, !wide && { fontSize: 38 }]}>{formatCurrency(data.total)}</Text>
               <Text style={styles.heroHint}>Incluye pendientes y aprobadas · excluye rechazadas</Text>

@@ -18,6 +18,7 @@ export async function reviewExpensesController(req: AuthenticatedRequest, res: R
     res.json({ message: decision === 'APPROVED' ? 'Boletas aprobadas.' : 'Boletas rechazadas.', updated: changed.length });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
+    if (message.includes('SELF_REVIEW_FORBIDDEN')) { res.status(403).json({message:'Otro administrador debe revisar tus boletas. Solo el único administrador activo puede confirmar sus propias rendiciones.'}); return; }
     if (message.includes('REVIEW_FORBIDDEN')) { res.status(403).json({ message: 'Tu cuenta no tiene permiso de revisión.' }); return; }
     if (message.includes('REVIEW_CONFLICT')) { res.status(409).json({ message: 'Alguna boleta ya no está pendiente o no está disponible. No se aplicó ningún cambio; actualiza el listado.' }); return; }
     res.status(500).json({ message: 'No fue posible guardar la revisión.' });

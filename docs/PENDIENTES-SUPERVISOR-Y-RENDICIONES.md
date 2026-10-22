@@ -1,5 +1,7 @@
 # Próxima sesión: supervisor que también rinde gastos
 
+Actualización: se implementaron las vistas personales/de empresa, los filtros, el listado de equipo y la política de aprobación según administradores activos. Ver [Rendiciones del supervisor](RENDICIONES-DEL-SUPERVISOR.md). El contenido siguiente conserva la solicitud original y las alternativas discutidas.
+
 Solicitud guardada el 22 de octubre de 2026. Este documento conserva lo conversado; no cambia el comportamiento actual de la aplicación.
 
 ## Necesidad

@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { autoApproveSoleAdmin } from '../services/approvalPolicy.service';
 import fs from 'fs/promises';
 import { driveUnavailableMessage, isDriveAuthorizationError, safeErrorMessage } from '../utils/storageError';
 
@@ -212,7 +213,14 @@ export async function createExpenseController(
          */
         createdExpenseId = null;
 
+        let approvalNotice: string | null = null;
+        if(req.user.role==='ADMIN') {
+            try { if(await autoApproveSoleAdmin(req.user.companyId,req.user.userId,expense.Id)) expense.Status='APPROVED'; }
+            catch { approvalNotice='Boleta guardada como pendiente. No fue posible comprobar la aprobación automática; revisa su estado desde el detalle.'; }
+        }
+
         res.status(201).json({
+            approvalNotice,
             message:
                 'Expense created successfully',
             expense,

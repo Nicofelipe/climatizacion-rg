@@ -74,6 +74,7 @@ export default function ExpenseDetailScreen() {
           <Text style={{ fontSize: 32, fontWeight: '700', color: Colors.primary }}>{formatCurrency(expense.TotalAmount)}</Text>
           {row('Número de boleta', expense.ReceiptNumber)}
           {row('Identificador del registro', String(expense.Id))}
+          {user?.role==='ADMIN'?row('Rendido por',expense.UserId===user.id?`${expense.UserName} · Yo`:expense.UserName):null}
           {row('Fecha de la boleta', expense.ExpenseDate.slice(0, 10))}
           {row('Tipo de gasto', expense.ExpenseTypeName)}
           {row('Proveedor', expense.SupplierName ?? 'Sin proveedor registrado')}
@@ -97,7 +98,8 @@ export default function ExpenseDetailScreen() {
           <Button title="Editar boleta" onPress={() => router.push({ pathname: '/(protected)/expenses/create', params: { editId: expense.Id } })} />
         </> : <Text style={{ color: Colors.textSecondary }}>{user?.role === 'ADMIN' ? 'Las correcciones de fecha o monto se realizan con motivo e historial, conservando el estado de revisión.' : expense.Status === 'REJECTED' ? 'Esta boleta fue rechazada y no se puede modificar. Debes ingresar una nueva boleta.' : 'Esta boleta no está disponible para edición del trabajador.'}</Text>}
         {expense.Status === 'REJECTED' ? <Button title="Registrar nuevamente" onPress={() => router.push('/(protected)/expenses/create')} /> : null}
-        {user?.role === 'ADMIN' && expense.Status === 'PENDING' ? <View style={{ backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 16, gap: Spacing.md }}>
+        {user?.role==='ADMIN'&&expense.UserId===user.id&&expense.Status==='PENDING'&&!expense.CanReview?<Text style={{color:Colors.textSecondary}}>Otro administrador debe revisar esta boleta. No puedes aprobar ni rechazar tu propia rendición cuando existe más de un administrador activo.</Text>:null}
+        {user?.role === 'ADMIN' && expense.Status === 'PENDING' && expense.CanReview ? <View style={{ backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 16, gap: Spacing.md }}>
           <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.text }}>Revisión del administrador</Text>
           {decision ? <>
             <Text style={{ color: Colors.text }}>¿Confirmas {decision === 'APPROVED' ? 'aprobar' : 'rechazar'} esta boleta? El trabajador ya no podrá modificarla. Una corrección administrativa exigirá motivo e historial.</Text>
@@ -106,8 +108,8 @@ export default function ExpenseDetailScreen() {
             <Button title="Confirmar revisión" onPress={confirmReview} loading={reviewing} />
             <Button title="Cancelar" onPress={() => { setDecision(null); setReviewError(''); }} disabled={reviewing} />
           </> : <>
-            <Button title="Aprobar boleta" onPress={() => setDecision('APPROVED')} />
-            <Button title="Rechazar con motivo" onPress={() => setDecision('REJECTED')} />
+            <Button title={expense.UserId===user.id?'Confirmar mis datos y aprobar (único administrador)':'Aprobar boleta'} onPress={() => setDecision('APPROVED')} />
+            {expense.UserId!==user.id?<Button title="Rechazar con motivo" onPress={() => setDecision('REJECTED')} />:null}
           </>}
         </View> : null}
       </> : null}

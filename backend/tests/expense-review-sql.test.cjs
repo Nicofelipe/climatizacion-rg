@@ -9,14 +9,15 @@ const cs = 'Driver={ODBC Driver 18 for SQL Server};Server=' + process.env.DB_SER
 const fixture = `SET NOCOUNT ON;
   CREATE TABLE #Role (Id int, Name nvarchar(20), IsActive bit);
   CREATE TABLE #AppUser (Id int, CompanyId int, RoleId int, IsActive bit);
-  CREATE TABLE #Expense (Id int, CompanyId int, Status nvarchar(20), IsDeleted bit,
+  CREATE TABLE #Expense (Id int, CompanyId int, Status nvarchar(20), IsDeleted bit, UserId int DEFAULT 6,
     RejectionReason nvarchar(1000), ReviewedByUserId int, ReviewedAt datetime2, UpdatedAt datetime2);
-  CREATE TABLE #AuditLog (CompanyId int, UserId int, Action nvarchar(100), Entity nvarchar(100), EntityId int);
+  CREATE TABLE #AuditLog (CompanyId int, UserId int, Action nvarchar(100), Entity nvarchar(100), EntityId int,Reason nvarchar(1000),CreatedAt datetime2);
   INSERT INTO #Role VALUES (1,N'ADMIN',1),(2,N'EMPLOYEE',1);
   INSERT INTO #AppUser VALUES (5,3,1,1),(6,3,2,1),(7,4,1,1);
   INSERT INTO #Expense (Id,CompanyId,Status,IsDeleted) VALUES
     (11,3,N'PENDING',0),(12,3,N'APPROVED',0),(13,3,N'PENDING',0),(21,4,N'PENDING',0);
 `;
+let ownReceipt=false,multipleAdmins=false;
 const file = require.resolve('../src/database/sqlServer.ts');
 require.cache[file] = { id: file, filename: file, loaded: true, exports: {
   executeQuery: async (statement, params) => {
@@ -26,7 +27,7 @@ require.cache[file] = { id: file, filename: file, loaded: true, exports: {
         (SELECT COUNT(*) FROM #AuditLog) AS AuditCount FROM @Changed c JOIN #Expense e ON e.Id=c.Id ORDER BY c.Id;`);
     return new Promise((resolve, reject) => {
       const results = [];
-      sql.query(cs, fixture + isolated, params, (error, rows, more) => {
+      sql.query(cs, fixture + (ownReceipt?'UPDATE #Expense SET UserId=5 WHERE Id=11;':'')+(multipleAdmins?'INSERT INTO #AppUser VALUES(8,3,1,1);':'')+ isolated, params, (error, rows, more) => {
         if (error) return reject(error);
         results.push(...(rows ?? []));
         if (!more) resolve(results);
@@ -58,5 +59,18 @@ test('SQL review transaction and authorization', { timeout: 30000 }, async t => 
     ['already reviewed receipt blocks whole batch', { expenseIds: [11,12] }, /REVIEW_CONFLICT/],
   ]) await t.test(name, async () => {
     await assert.rejects(reviewExpenses({ ...input, ...overrides }), expected);
+  });
+  await t.test('self-review forbidden with multiple administrators and entire batch rolled back',async()=>{
+    ownReceipt=true;multipleAdmins=true;
+    await assert.rejects(reviewExpenses({...input,expenseIds:[11,13]}),/SELF_REVIEW_FORBIDDEN/);
+  });
+  await t.test('another administrator can approve the owner receipt',async()=>{
+    const rows=await reviewExpenses({...input,reviewerId:8});assert.equal(rows[0].Status,'APPROVED');
+  });
+  await t.test('sole administrator can explicitly approve own legacy pending receipt',async()=>{
+    multipleAdmins=false;const rows=await reviewExpenses(input);assert.equal(rows[0].Status,'APPROVED');
+  });
+  await t.test('sole administrator cannot reject own receipt',async()=>{
+    await assert.rejects(reviewExpenses({...input,decision:'REJECTED',reason:'test'}),/SELF_REVIEW_FORBIDDEN/);
   });
 });
