@@ -3,6 +3,8 @@ Mobile application for managing expenses, receipts, annual reports and business 
 
 ## Guías
 
+- [Configurar Gmail para los correos de prueba](docs/CONFIGURAR-GMAIL-PRUEBAS.md).
+
 - [Recuperar contraseña por correo y registrar supervisores](docs/RECUPERAR-CONTRASENA.md).
 
 - [Contraseña inicial, primer acceso y plazo de 48 horas](docs/CONTRASENA-INICIAL.md).
