@@ -18,6 +18,7 @@ export function generateAccessToken(payload: TokenPayload) {
     (process.env.JWT_EXPIRES_IN ?? '8h') as jwt.SignOptions['expiresIn'];
 
   return jwt.sign(payload, secret, {
+    algorithm:'HS256',
     expiresIn,
   });
 }

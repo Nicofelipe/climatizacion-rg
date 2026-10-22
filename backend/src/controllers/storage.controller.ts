@@ -1,9 +1,10 @@
 import { Response } from 'express';
 
-import jwt from 'jsonwebtoken';
+import { createDriveAttempt,consumeDriveAttempt } from '../services/driveOAuthState.service';
+import { getPasswordAccount,passwordPolicy } from '../services/passwordPolicy.service';
 import { googleOAuthClient } from '../config/googleOAuth';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
-import { validateGoogleDriveFolder } from '../services/googleDrive.service';
+import { validateGoogleDriveFolder,validateDriveRefreshToken } from '../services/googleDrive.service';
 import {
     getCompanyStorage,
 } from '../services/storage.service';
@@ -121,17 +122,9 @@ export async function connectGoogleDriveController(
       return;
     }
 
-    const state = jwt.sign(
-      {
-        companyId: req.user.companyId,
-        userId: req.user.userId,
-        purpose: 'GOOGLE_DRIVE_OAUTH',
-      },
-      jwtSecret,
-      {
-        expiresIn: '10m',
-      }
-    );
+    const account=await getPasswordAccount(req.user.companyId,req.user.userId);
+    if(!account||account.RoleName!=='ADMIN'||passwordPolicy(account).expired){res.sendStatus(403);return;}
+    const state=createDriveAttempt(req.user.companyId,req.user.userId,account.PasswordVersion);
 
     const authorizationUrl =
       googleOAuthClient.generateAuthUrl({
@@ -149,7 +142,7 @@ export async function connectGoogleDriveController(
   } catch (error) {
     console.error(
       'Google Drive connection error:',
-      error
+      safeErrorMessage(error)
     );
 
     res.status(500).json({
@@ -158,12 +151,6 @@ export async function connectGoogleDriveController(
   }
 }
 
-
-interface GoogleDriveOAuthState {
-  companyId: number;
-  userId: number;
-  purpose: string;
-}
 
 export async function googleDriveCallbackController(
   req: AuthenticatedRequest,
@@ -191,14 +178,9 @@ export async function googleDriveCallbackController(
       throw new Error('JWT_SECRET is not configured');
     }
 
-    const decoded = jwt.verify(
-      state,
-      jwtSecret
-    ) as GoogleDriveOAuthState;
-
-    if (decoded.purpose !== 'GOOGLE_DRIVE_OAUTH' ||
-        !Number.isInteger(decoded.companyId) || decoded.companyId <= 0 ||
-        !Number.isInteger(decoded.userId) || decoded.userId <= 0) {
+    const decoded=consumeDriveAttempt(state);
+    const account=await getPasswordAccount(decoded.companyId,decoded.userId);
+    if(!account||account.RoleName!=='ADMIN'||account.PasswordVersion!==decoded.passwordVersion||passwordPolicy(account).expired){
       res.status(400).json({
         message: 'Invalid OAuth state',
       });
@@ -229,12 +211,17 @@ export async function googleDriveCallbackController(
       return;
     }
 
+    // Check the new account can access the fixed folder before replacing a
+    // working credential. No folder or account identifiers come from the URL.
+    await validateDriveRefreshToken(existingStorage.RootFolderId,tokens.refresh_token);
+
     /*
      * Guardamos el refresh token cifrado.
      */
     await upsertStorageCredential(
       existingStorage.Id,
-      tokens.refresh_token
+      tokens.refresh_token,
+      {companyId:decoded.companyId,userId:decoded.userId,passwordVersion:decoded.passwordVersion}
     );
 
     res.status(200).type('html').send('<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Drive conectado</title><body style="font-family:system-ui;padding:40px;max-width:560px;margin:auto"><h1>Google Drive conectado</h1><p>La autorización se actualizó correctamente. Puedes cerrar esta pestaña y volver al formulario de la boleta para guardarla.</p></body></html>');

@@ -6,6 +6,13 @@ import { getStorageRefreshToken } from './storageCredential.service';
 import { executeQuery } from '../database/sqlServer';
 import { buildExpenseFileName } from '../utils/expenseFileName';
 
+export async function validateDriveRefreshToken(folderId:string,refreshToken:string){
+  const auth=new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID,process.env.GOOGLE_CLIENT_SECRET,process.env.GOOGLE_REDIRECT_URI);
+  auth.setCredentials({refresh_token:refreshToken});
+  const result=await google.drive({version:'v3',auth}).files.get({fileId:folderId,fields:'id,mimeType,trashed'});
+  if(result.data.trashed||result.data.mimeType!=='application/vnd.google-apps.folder')throw new Error('DRIVE_FOLDER_UNAVAILABLE');
+}
+
 async function getExpenseOwnerName(companyId: number, expenseId: number) {
   const rows = await executeQuery<{ FirstName: string; LastName: string; ReceiptNumber: string }>(`
     SELECT u.FirstName, u.LastName, e.ReceiptNumber FROM dbo.Expense e

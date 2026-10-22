@@ -9,13 +9,14 @@ import {
     authenticateToken,
 } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
+import { loginAccountLimit, loginNetworkLimit } from '../middlewares/security.middleware';
 
 const router = Router();
 router.use(passwordRecoveryRoutes);
 router.use(passwordRoutes);
 router.use('/google',googleLoginRoutes);
 
-router.post('/login', loginController);
+router.post('/login', loginNetworkLimit, loginAccountLimit, loginController);
 
 router.get(
   '/me',

@@ -10,14 +10,14 @@ const fixture = `SET NOCOUNT ON;
   CREATE TABLE #Role (Id int, Name nvarchar(20), IsActive bit);
   CREATE TABLE #AppUser (Id int, CompanyId int, RoleId int, IsActive bit);
   CREATE TABLE #Expense (Id int, CompanyId int, Status nvarchar(20), IsDeleted bit, UserId int DEFAULT 6,
-    RejectionReason nvarchar(1000), ReviewedByUserId int, ReviewedAt datetime2, UpdatedAt datetime2);
+    RejectionReason nvarchar(1000), ReviewedByUserId int, ReviewedAt datetime2, UpdatedAt datetime2,DriveSyncPending bit DEFAULT 0);
   CREATE TABLE #AuditLog (CompanyId int, UserId int, Action nvarchar(100), Entity nvarchar(100), EntityId int,Reason nvarchar(1000),CreatedAt datetime2);
   INSERT INTO #Role VALUES (1,N'ADMIN',1),(2,N'EMPLOYEE',1);
   INSERT INTO #AppUser VALUES (5,3,1,1),(6,3,2,1),(7,4,1,1);
   INSERT INTO #Expense (Id,CompanyId,Status,IsDeleted) VALUES
     (11,3,N'PENDING',0),(12,3,N'APPROVED',0),(13,3,N'PENDING',0),(21,4,N'PENDING',0);
 `;
-let ownReceipt=false,multipleAdmins=false;
+let ownReceipt=false,multipleAdmins=false,syncPending=false;
 const file = require.resolve('../src/database/sqlServer.ts');
 require.cache[file] = { id: file, filename: file, loaded: true, exports: {
   executeQuery: async (statement, params) => {
@@ -27,7 +27,7 @@ require.cache[file] = { id: file, filename: file, loaded: true, exports: {
         (SELECT COUNT(*) FROM #AuditLog) AS AuditCount FROM @Changed c JOIN #Expense e ON e.Id=c.Id ORDER BY c.Id;`);
     return new Promise((resolve, reject) => {
       const results = [];
-      sql.query(cs, fixture + (ownReceipt?'UPDATE #Expense SET UserId=5 WHERE Id=11;':'')+(multipleAdmins?'INSERT INTO #AppUser VALUES(8,3,1,1);':'')+ isolated, params, (error, rows, more) => {
+      sql.query(cs, fixture + (syncPending?'UPDATE #Expense SET DriveSyncPending=1 WHERE Id=11;':'')+(ownReceipt?'UPDATE #Expense SET UserId=5 WHERE Id=11;':'')+(multipleAdmins?'INSERT INTO #AppUser VALUES(8,3,1,1);':'')+ isolated, params, (error, rows, more) => {
         if (error) return reject(error);
         results.push(...(rows ?? []));
         if (!more) resolve(results);
@@ -38,6 +38,9 @@ require.cache[file] = { id: file, filename: file, loaded: true, exports: {
 const { reviewExpenses } = require('../src/services/expenseReview.service.ts');
 const input = { companyId: 3, reviewerId: 5, expenseIds: [11], decision: 'APPROVED', reason: null };
 test('SQL review transaction and authorization', { timeout: 30000 }, async t => {
+  await t.test('cannot approve a receipt while its image or edit is being synchronized',async()=>{
+    syncPending=true;try{await assert.rejects(reviewExpenses(input),/REVIEW_CONFLICT/);}finally{syncPending=false;}
+  });
   await t.test('approve pending batch and audit every record', async () => {
     const rows = await reviewExpenses({ ...input, expenseIds: [11,13] });
     assert.equal(rows.length, 2);

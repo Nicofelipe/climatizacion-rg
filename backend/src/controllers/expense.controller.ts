@@ -1,4 +1,6 @@
 import { Response } from 'express';
+import { validExpenseFields } from '../utils/expenseInput';
+import { lockExpenseOperation } from '../services/expenseOperationLock.service';
 import { autoApproveSoleAdmin } from '../services/approvalPolicy.service';
 import fs from 'fs/promises';
 import { driveUnavailableMessage, isDriveAuthorizationError, safeErrorMessage } from '../utils/storageError';
@@ -12,6 +14,7 @@ import {
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import {
     createExpense,
+    finishExpenseSync,
     deleteExpense,
     getExpenseById,
     getExpenses,
@@ -59,6 +62,7 @@ export async function createExpenseController(
      * si algo falla después de crear recursos.
      */
     let createdExpenseId: number | null = null;
+    let releaseOperation:(()=>void)|null=null;
     let newDriveFileId: string | null = null;
 
     try {
@@ -94,10 +98,7 @@ export async function createExpenseController(
         if (
             !Number.isInteger(expenseTypeId) ||
             expenseTypeId <= 0 ||
-            !receiptNumber ||
-            !expenseDate ||
-            !Number.isFinite(totalAmount) ||
-            totalAmount <= 0
+            !validExpenseFields(receiptNumber,expenseDate,totalAmount,description)
         ) {
             res.status(400).json({
                 message:
@@ -146,6 +147,8 @@ export async function createExpenseController(
             });
 
         createdExpenseId = expense.Id;
+        releaseOperation=lockExpenseOperation(req.user.companyId,expense.Id);
+        if(!releaseOperation)throw new Error('EXPENSE_OPERATION_BUSY');
 
         /*
          * 2. Si existe imagen, subirla a Drive.
@@ -213,6 +216,8 @@ export async function createExpenseController(
          */
         createdExpenseId = null;
 
+        await finishExpenseSync(req.user.companyId,expense.Id);
+
         let approvalNotice: string | null = null;
         if(req.user.role==='ADMIN') {
             try { if(await autoApproveSoleAdmin(req.user.companyId,req.user.userId,expense.Id)) expense.Status='APPROVED'; }
@@ -247,7 +252,7 @@ export async function createExpenseController(
             ) {
                 console.error(
                     'Google Drive rollback error:',
-                    driveCleanupError
+                    safeErrorMessage(driveCleanupError)
                 );
             }
         }
@@ -289,6 +294,7 @@ export async function createExpenseController(
             return;
         }
 
+        if(error instanceof Error&&error.message==='INVALID_SUPPLIER_REFERENCE'){res.status(400).json({message:'El proveedor no está disponible para tu empresa.'});return;}
         console.error('Create expense error:', safeErrorMessage(error));
 
         if (isDriveAuthorizationError(error)) {
@@ -304,6 +310,7 @@ export async function createExpenseController(
                 'Internal server error',
         });
     } finally {
+        releaseOperation?.();
         /*
          * uploads/ siempre es temporal.
          */
@@ -414,6 +421,7 @@ export async function updateExpenseController(
     let fileWasCreated = false;
 
     let expenseId: number | null = null;
+    let releaseOperation:(()=>void)|null=null;
 
     try {
         if (!req.user) {
@@ -434,6 +442,9 @@ export async function updateExpenseController(
             });
             return;
         }
+
+        releaseOperation=lockExpenseOperation(req.user.companyId,expenseId);
+        if(!releaseOperation){res.status(409).json({message:'La boleta tiene otra operación en curso. Espera y recarga su detalle.'});return;}
 
         /*
          * Con multipart/form-data los valores
@@ -464,10 +475,7 @@ export async function updateExpenseController(
         if (
             !Number.isInteger(expenseTypeId) ||
             expenseTypeId <= 0 ||
-            !receiptNumber ||
-            !expenseDate ||
-            !Number.isFinite(totalAmount) ||
-            totalAmount <= 0
+            !validExpenseFields(receiptNumber,expenseDate,totalAmount,description)
         ) {
             res.status(400).json({
                 message:
@@ -617,7 +625,7 @@ export async function updateExpenseController(
                 ) {
                     console.error(
                         'Google Drive compensation error:',
-                        compensationError
+                        safeErrorMessage(compensationError)
                     );
                 }
             }
@@ -675,40 +683,8 @@ export async function updateExpenseController(
 
                 fileWasUpdated = true;
 
-                /*
-                 * La base de datos ya apunta al
-                 * archivo nuevo.
-                 *
-                 * Ahora podemos eliminar el antiguo.
-                 */
-                if (
-                    currentFile.Provider ===
-                    'GOOGLE_DRIVE' &&
-                    currentFile.ProviderFileId !==
-                    newDriveFileId
-                ) {
-                    try {
-                        await deleteGoogleDriveFile(
-                            req.user.companyId,
-                            currentFile.ProviderFileId
-                        );
-                    } catch (
-                    deleteOldFileError
-                    ) {
-                        /*
-                         * No rompemos la edición:
-                         * SQL ya apunta correctamente
-                         * al archivo nuevo.
-                         *
-                         * Este archivo antiguo queda
-                         * pendiente de limpieza.
-                         */
-                        console.error(
-                            'Old Google Drive file cleanup error:',
-                            deleteOldFileError
-                        );
-                    }
-                }
+                // Keep the previous image in the private company backup.
+                // A later rollback must never point to an already deleted file.
             } else {
                 /*
                  * La boleta no tenía imagen.
@@ -770,6 +746,7 @@ export async function updateExpenseController(
                 expenseDate,
             });
         }
+        await finishExpenseSync(req.user.companyId,expenseId);
         expenseWasUpdated = false;
         fileWasUpdated = false;
         fileWasCreated = false;
@@ -873,7 +850,7 @@ export async function updateExpenseController(
             } catch (compensationError) {
                 console.error(
                     'Google Drive compensation error:',
-                    compensationError
+                    safeErrorMessage(compensationError)
                 );
             }
         }
@@ -955,6 +932,7 @@ export async function updateExpenseController(
             return;
         }
 
+        if(error instanceof Error&&error.message==='INVALID_SUPPLIER_REFERENCE'){res.status(400).json({message:'El proveedor no está disponible para tu empresa.'});return;}
         console.error('Update expense error:', safeErrorMessage(error));
 
         if (isDriveAuthorizationError(error)) {
@@ -970,6 +948,7 @@ export async function updateExpenseController(
                 'Internal server error',
         });
     } finally {
+        releaseOperation?.();
         /*
          * Multer solamente usa uploads/
          * como almacenamiento temporal.

@@ -1,7 +1,8 @@
 require('tsx/cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const jwt = require('jsonwebtoken');
+const {createDriveAttempt}=require('../src/services/driveOAuthState.service.ts');
+let account={RoleName:'ADMIN',PasswordVersion:0,MustChangePassword:false,Deadline:null};
 let savedCredential;
 let savedFolder;
 function stub(relativePath, exports) {
@@ -19,13 +20,14 @@ stub('../src/services/storage.service.ts', {
 stub('../src/services/storageCredential.service.ts', {
   upsertStorageCredential: async (id, token) => { savedCredential = { id, token }; },
 });
-stub('../src/services/googleDrive.service.ts', {});
+stub('../src/services/googleDrive.service.ts', {validateDriveRefreshToken:async()=>{}});
+stub('../src/services/passwordPolicy.service.ts',{getPasswordAccount:async()=>account,passwordPolicy:()=>({expired:false})});
 const { googleDriveCallbackController, updateGoogleDriveStorageController } = require('../src/controllers/storage.controller.ts');
 test('Drive reconnect retains configured folder without Picker parameters', async () => {
   const previous = process.env.JWT_SECRET;
   process.env.JWT_SECRET = 'isolated-drive-test-secret';
   try {
-    const state = jwt.sign({ companyId: 3, userId: 7, purpose: 'GOOGLE_DRIVE_OAUTH' }, process.env.JWT_SECRET);
+    const state = createDriveAttempt(3,7,0);
     const res = { status(code) { this.code = code; return this; },
       type() { return this; }, send(body) { this.body = body; return this; },
       json(body) { this.body = body; return this; } };
@@ -35,10 +37,25 @@ test('Drive reconnect retains configured folder without Picker parameters', asyn
     assert.equal(savedCredential.id, 5);
     assert.match(res.body, /Google Drive conectado/);
     assert.equal(res.body.includes('test-only-token'), false);
+    const replay={status(code){this.code=code;return this;},json(){}};
+    await googleDriveCallbackController({query:{code:'other-code',state}},replay);
+    assert.equal(replay.code,400);
   } finally {
     if (previous === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = previous;
   }
+});
+
+test('Drive callback rejects a former administrator and a revoked session',async()=>{
+ const previous=process.env.JWT_SECRET;process.env.JWT_SECRET='isolated-drive-test-secret';
+ try{
+  for(const replacement of [null,{RoleName:'EMPLOYEE',PasswordVersion:0},{RoleName:'ADMIN',PasswordVersion:1}]){
+   const state=createDriveAttempt(3,7,0);account=replacement;savedCredential=undefined;
+   const res={status(code){this.code=code;return this;},json(){}};
+   await googleDriveCallbackController({query:{code:'test-code',state}},res);
+   assert.equal(res.code,400);assert.equal(savedCredential,undefined);
+  }
+ }finally{account={RoleName:'ADMIN',PasswordVersion:0};if(previous===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=previous;}
 });
 
 test('administrator cannot change folder through API', async () => {

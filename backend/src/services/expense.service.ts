@@ -1,5 +1,16 @@
 import { executeQuery } from '../database/sqlServer';
 
+async function validateSupplier(companyId:number,supplierId?:number|null){
+  if(supplierId==null)return;
+  const rows=await executeQuery<{Id:number}>('SELECT Id FROM dbo.Supplier WHERE Id=? AND CompanyId=? AND IsActive=1;',[supplierId,companyId]);
+  if(!rows[0])throw new Error('INVALID_SUPPLIER_REFERENCE');
+}
+
+export async function finishExpenseSync(companyId:number,expenseId:number){
+  await executeQuery(`UPDATE dbo.Expense SET DriveSyncPending=0 WHERE Id=? AND CompanyId=? AND IsDeleted=0 AND Status=N'PENDING'
+    AND EXISTS(SELECT 1 FROM dbo.[File] f WHERE f.CompanyId=dbo.Expense.CompanyId AND f.EntityId=dbo.Expense.Id AND f.EntityType=N'EXPENSE');`,[expenseId,companyId]);
+}
+
 interface CreateExpenseInput {
   companyId: number;
   userId: number;
@@ -71,6 +82,7 @@ interface RollbackUpdatedExpenseInput {
 }
 
 export async function createExpense(input: CreateExpenseInput) {
+    await validateSupplier(input.companyId,input.supplierId);
     const receiptNumber =
         input.receiptNumber.trim().toUpperCase();
 
@@ -120,7 +132,8 @@ export async function createExpense(input: CreateExpenseInput) {
         VatAmount,
         TotalAmount,
         Description,
-        Status
+        Status,
+        DriveSyncPending
       )
       OUTPUT
         INSERTED.Id,
@@ -150,7 +163,8 @@ export async function createExpense(input: CreateExpenseInput) {
         ?,
         ?,
         ?,
-        N'PENDING'
+        N'PENDING',
+        1
       );
     `,
     [
@@ -201,7 +215,7 @@ export async function getExpenses(
       INNER JOIN dbo.ExpenseType AS et
         ON et.Id = e.ExpenseTypeId
       LEFT JOIN dbo.Supplier AS s
-        ON s.Id = e.SupplierId
+        ON s.Id = e.SupplierId AND s.CompanyId=e.CompanyId
       WHERE e.CompanyId = ?
         AND e.IsDeleted = 0
         AND (? = 1 OR e.UserId = ?)
@@ -260,7 +274,7 @@ export async function getExpenseById(
         ON et.Id = e.ExpenseTypeId
 
       LEFT JOIN dbo.Supplier AS s
-        ON s.Id = e.SupplierId
+        ON s.Id = e.SupplierId AND s.CompanyId=e.CompanyId
 
       LEFT JOIN dbo.[File] AS f
         ON f.EntityType = N'EXPENSE'
@@ -340,6 +354,7 @@ interface UpdateExpenseInput {
 export async function updateExpense(
     input: UpdateExpenseInput
 ) {
+    await validateSupplier(input.companyId,input.supplierId);
     const receiptNumber =
         input.receiptNumber.trim().toUpperCase();
 
@@ -405,6 +420,7 @@ export async function updateExpense(
                 VatAmount = ?,
                 TotalAmount = ?,
                 Description = ?,
+                DriveSyncPending = 1,
                 UpdatedAt = SYSDATETIME()
             WHERE Id = ?
               AND CompanyId = ?
@@ -461,21 +477,26 @@ export async function deleteExpense(
   role: string
 ) {
   const rows = await executeQuery<{ Id: number }>(
-    `
+    `SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRY BEGIN TRANSACTION;
+      DECLARE @Deleted TABLE(Id int);
       UPDATE dbo.Expense
       SET
         IsDeleted = 1,
         UpdatedAt = SYSDATETIME()
       OUTPUT
-        INSERTED.Id
+        INSERTED.Id INTO @Deleted
       WHERE Id = ?
         AND CompanyId = ?
         AND IsDeleted = 0
         AND Status = N'PENDING'
         AND DriveSyncPending = 0
         AND (? = 1 OR UserId = ?);
+      INSERT INTO dbo.AuditLog(CompanyId,UserId,Action,Entity,EntityId,Reason,CreatedAt)
+        SELECT ?,?,N'SOFT_DELETE_EXPENSE',N'EXPENSE',Id,N'Boleta pendiente retirada del listado; registro e imagen conservados.',SYSUTCDATETIME() FROM @Deleted;
+      COMMIT TRANSACTION; SELECT Id FROM @Deleted;
+      END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK TRANSACTION; THROW; END CATCH;
     `,
-    [expenseId, companyId, role === 'ADMIN' ? 1 : 0, userId]
+    [expenseId, companyId, role === 'ADMIN' ? 1 : 0, userId,companyId,userId]
   );
 
   return rows[0] ?? null;
@@ -490,7 +511,7 @@ export async function rollbackCreatedExpense(
         `
         DELETE FROM dbo.Expense
         WHERE Id = ?
-          AND CompanyId = ?;
+          AND CompanyId = ? AND Status=N'PENDING' AND DriveSyncPending=1;
         `,
         [
             expenseId,
@@ -520,10 +541,12 @@ export async function rollbackUpdatedExpense(
             VatAmount = ?,
             TotalAmount = ?,
             Description = ?,
+            DriveSyncPending = 0,
             UpdatedAt = SYSDATETIME()
         WHERE Id = ?
           AND CompanyId = ?
-          AND IsDeleted = 0;
+          AND IsDeleted = 0 AND Status=N'PENDING' AND DriveSyncPending=1;
+        IF @@ROWCOUNT=0 THROW 50083,'EXPENSE_ROLLBACK_CONFLICT',1;
         SELECT @After=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status,ExpenseTypeId,SupplierId,ReceiptNumber,Description
           FROM dbo.Expense WHERE Id=? AND CompanyId=? FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
         INSERT INTO dbo.AuditLog(CompanyId,UserId,Action,Entity,EntityId,BeforeData,AfterData,Reason,CreatedAt)

@@ -4,7 +4,7 @@ import { loginService } from '../services/auth.service';
 
 export async function loginController(req: Request, res: Response) {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body??{};
 
     if (typeof email !== 'string' || !email.trim() ||
         typeof password !== 'string' || !password ||
@@ -33,7 +33,7 @@ export async function loginController(req: Request, res: Response) {
       return;
     }
 
-    console.error('Login error:', error);
+    console.error('Login operation failed');
 
     res.status(500).json({
       message: 'Internal server error',

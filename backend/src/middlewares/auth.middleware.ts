@@ -38,7 +38,8 @@ export async function authenticateToken(
   try {
     const payload = jwt.verify(
       token,
-      secret
+      secret,
+      { algorithms:['HS256'] }
     ) as AuthTokenPayload;
 
     if (!payload || !Number.isInteger(payload.userId) || payload.userId <= 0 ||

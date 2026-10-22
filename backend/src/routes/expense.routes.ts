@@ -8,7 +8,8 @@ import {
     updateExpenseController
 } from '../controllers/expense.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
-import { uploadReceiptImage } from '../middlewares/upload.middleware';
+import { uploadReceiptImage,validateReceiptImage } from '../middlewares/upload.middleware';
+import { fixedWindowLimit } from '../middlewares/security.middleware';
 import { getExpenseImageController } from '../controllers/expenseImage.controller';
 import { reviewExpensesController } from '../controllers/expenseReview.controller';
 import { requireRole } from '../middlewares/role.middleware';
@@ -17,6 +18,9 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { correctExpenseController, expenseHistoryController, retryExpenseSyncController } from '../controllers/expenseCorrection.controller';
 
 const router = Router();
+const uploadLimit=fixedWindowLimit(30,300000,req=>{
+  const user=(req as AuthenticatedRequest).user!;return `${user.companyId}:${user.userId}`;
+});
 
 router.get('/', authenticateToken, getExpensesController);
 router.get('/pending-review',authenticateToken,requireRole('ADMIN'),async(req:AuthenticatedRequest,res)=>{
@@ -35,14 +39,18 @@ router.get('/:id/image', authenticateToken, getExpenseImageController);
 router.post(
     '/',
     authenticateToken,
+    uploadLimit,
     uploadReceiptImage.single('image'),
+    validateReceiptImage,
     createExpenseController
 );
 
 router.put(
   '/:id',
   authenticateToken,
+  uploadLimit,
   uploadReceiptImage.single('image'),
+  validateReceiptImage,
   updateExpenseController
 );
 

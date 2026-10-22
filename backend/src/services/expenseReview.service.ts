@@ -30,6 +30,7 @@ export async function reviewExpenses(input: {
           ReviewedAt = SYSUTCDATETIME(), UpdatedAt = SYSDATETIME()
       OUTPUT INSERTED.Id INTO @Changed
       WHERE CompanyId = ? AND IsDeleted = 0 AND Status = N'PENDING'
+        AND DriveSyncPending=0
         AND Id IN (${placeholders});
 
       IF (SELECT COUNT(*) FROM @Changed) <> ?

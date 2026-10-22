@@ -2,6 +2,8 @@ import bcrypt from 'bcryptjs';
 import msnodesqlv8 from 'msnodesqlv8';
 
 import { recordSuccessfulLogin,passwordSession } from './passwordPolicy.service';
+// Match the password work factor even when the mailbox is unknown.
+const dummyHash=bcrypt.hashSync('unregistered-account-placeholder',12);
 
 const connectionString =
     'Driver={ODBC Driver 18 for SQL Server};' +
@@ -69,6 +71,7 @@ export async function loginService(email: string, password: string) {
     const user = users[0];
 
     if (!user || users.length !== 1) {
+        await bcrypt.compare(password,dummyHash);
         throw new Error('INVALID_CREDENTIALS');
     }
 

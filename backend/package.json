@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "engines": { "node": "24.x" },
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -23,7 +24,7 @@
     "jsonwebtoken": "^9.0.3",
     "msnodesqlv8": "^5.2.3",
     "mssql": "^12.7.0",
-    "multer": "^2.2.0",
+    "multer": "^2.4.0",
     "nodemailer": "^10.2.1"
   },
   "devDependencies": {

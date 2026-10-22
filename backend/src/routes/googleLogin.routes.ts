@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { completeGoogleLogin, exchangeGoogleTicket, startGoogleLogin } from '../services/googleLogin.service';
+import { googleAttemptLimit } from '../middlewares/security.middleware';
 const router=Router();
+router.use(googleAttemptLimit);
 router.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');next();});
 router.post('/start',(req,res)=>{
   const {redirectUri,challenge}=req.body??{};

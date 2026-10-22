@@ -13,6 +13,7 @@ function stub(relativePath, exports) {
   require.cache[filename] = { id: filename, filename, loaded: true, exports };
 }
 stub('../src/services/expense.service.ts', {
+  finishExpenseSync:async()=>{},
   createExpense: async () => { writes++; return { Id: 1 }; },
   getExpenseById: async () => ({ Id: 1, Status: 'APPROVED' }),
   rollbackCreatedExpense: async () => { rolledBack = true; },

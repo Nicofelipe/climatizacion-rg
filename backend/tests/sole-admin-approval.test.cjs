@@ -5,12 +5,12 @@ let secondAdmin=false,hasImage=true,owner=5,secondActive=1,saved;
 const fixture=()=>`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);
 CREATE TABLE #AppUser(Id int,CompanyId int,RoleId int,IsActive bit);
-CREATE TABLE #Expense(Id int,CompanyId int,UserId int,Status nvarchar(20),IsDeleted bit,ReviewedByUserId int,ReviewedAt datetime2,UpdatedAt datetime2);
+CREATE TABLE #Expense(Id int,CompanyId int,UserId int,Status nvarchar(20),IsDeleted bit,ReviewedByUserId int,ReviewedAt datetime2,UpdatedAt datetime2,DriveSyncPending bit);
 CREATE TABLE #File(CompanyId int,EntityId int,EntityType nvarchar(30));
 CREATE TABLE #AuditLog(CompanyId int,UserId int,Action nvarchar(100),Entity nvarchar(100),EntityId int,Reason nvarchar(1000),CreatedAt datetime2);
 INSERT INTO #Role VALUES(1,N'ADMIN',1),(2,N'EMPLOYEE',1);
 INSERT INTO #AppUser VALUES(5,3,1,1),(6,3,2,1),(7,4,1,1);
-INSERT INTO #Expense VALUES(11,3,${owner},N'PENDING',0,NULL,NULL,NULL);
+INSERT INTO #Expense VALUES(11,3,${owner},N'PENDING',0,NULL,NULL,NULL,0);
 ${secondAdmin?`INSERT INTO #AppUser VALUES(8,3,1,${secondActive});`:''}
 ${hasImage?`INSERT INTO #File VALUES(3,11,N'EXPENSE');`:''}
 `;
