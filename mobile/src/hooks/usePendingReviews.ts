@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { usePathname } from 'expo-router';
 import { requestJson } from '@/api/http';
+import { onDataRefresh } from '@/utils/refreshEvents';
 
 export function usePendingReviews(token:string|null,admin:boolean){
   const [count,setCount]=useState(0);
@@ -28,9 +29,10 @@ export function usePendingReviews(token:string|null,admin:boolean){
       finally{busy=false;}
     }
     refresh.current=load;void load();
+    const unsubscribe=onDataRefresh(()=>{void load();});
     const timer=setInterval(load,30000);
     const subscription=AppState.addEventListener('change',state=>{if(state==='active')void load();});
-    return()=>{active=false;clearInterval(timer);subscription.remove();refresh.current=()=>{};};
+    return()=>{active=false;clearInterval(timer);subscription.remove();unsubscribe();refresh.current=()=>{};};
   },[token,admin]);
   useEffect(()=>{refresh.current();},[path]);
   return {count,notice,dismiss:()=>setNotice(0)};

@@ -7,6 +7,7 @@ import styles, { dashboardPalette } from '@/components/common/DashboardOverview.
 import ExpenseStatus from '@/components/common/ExpenseStatus';
 import DashboardPeriodSelector from '@/components/common/DashboardPeriodSelector';
 import ExpenseScopeSelector from '@/components/common/ExpenseScopeSelector';
+import RefreshableScrollView from '@/components/common/RefreshableScrollView';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { formatCurrency } from '@/utils/currency';
@@ -36,7 +37,7 @@ export default function Dashboard() {
   const maxTrend = Math.max(1, ...(data?.trend.map(item => item.amount) ?? []));
   const goExpenses = () => router.push({pathname:'/(protected)/(tabs)/expenses',params:{view:companyView?'company':'personal',workerId:undefined}});
   return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
-    <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor="#0F8277" />}>
+    <RefreshableScrollView contentContainerStyle={styles.content} refreshing={loading} onRefresh={reload}>
       <View style={styles.row}>
         <View style={styles.brand}>
           <View style={styles.brandIcon}><Ionicons name="business-outline" size={21} color="#0F8277" /></View>
@@ -131,6 +132,6 @@ export default function Dashboard() {
         </View>
         <Text style={styles.footnote}>Montos en CLP · {data.scope === 'company' ? 'Resumen de tu empresa' : 'Resumen de tus propias boletas'}{ '\n' }Actualizado a las {new Date(data.generatedAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}</Text>
       </> : null}
-    </ScrollView>
+    </RefreshableScrollView>
   </SafeAreaView>;
 }

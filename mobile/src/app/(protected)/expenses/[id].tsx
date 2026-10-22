@@ -7,6 +7,7 @@ import AppContainer from '@/components/layout/AppContainer';
 import Button from '@/components/ui/Button';
 import ExpenseStatus from '@/components/common/ExpenseStatus';
 import ExpenseHistory from '@/components/common/ExpenseHistory';
+import RefreshableScrollView from '@/components/common/RefreshableScrollView';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils/currency';
@@ -62,7 +63,7 @@ export default function ExpenseDetailScreen() {
     <Text selectable style={{ color: Colors.text, fontSize: 16 }}>{value}</Text>
   </View>;
   return <AppContainer>
-    <ScrollView contentContainerStyle={{ gap: Spacing.lg, paddingBottom: 32 }}>
+    <RefreshableScrollView refreshing={loading} onRefresh={()=>setAttempt(value=>value+1)} contentContainerStyle={{ gap: Spacing.lg, paddingBottom: 32 }}>
       <Pressable onPress={() => router.replace('/(protected)/(tabs)/expenses')} accessibilityRole="button"><Text style={{ color: Colors.primary }}>← Volver a boletas</Text></Pressable>
       <Text style={{ fontSize: 28, fontWeight: '700', color: Colors.text }}>Detalle de boleta</Text>
       {loading ? <ActivityIndicator /> : error ? <>
@@ -113,7 +114,7 @@ export default function ExpenseDetailScreen() {
           </>}
         </View> : null}
       </> : null}
-    </ScrollView>
+    </RefreshableScrollView>
     <Modal visible={expanded} onRequestClose={() => setExpanded(false)}>
       <View style={{ flex: 1, backgroundColor: '#111827', padding: 20, gap: 16 }}>
         <Button title="Cerrar imagen" onPress={() => setExpanded(false)} />

@@ -7,18 +7,20 @@ import AppContainer from '@/components/layout/AppContainer';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Colors } from '@/theme';
+import RefreshableScrollView from '@/components/common/RefreshableScrollView';
 interface Employee{Id:number;FirstName:string;LastName:string;Email:string;Phone:string|null;Role:string;ReceiptCount:number;PendingCount:number;ApprovedCount:number;RejectedCount:number}
 export default function Employees(){
   const wide=useWindowDimensions().width>=760;
   const {user,token}=useAuth();const [employees,setEmployees]=useState<Employee[]>([]);const [selected,setSelected]=useState<Employee|null>(null);
   const [reason,setReason]=useState('');const [message,setMessage]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [attempt,setAttempt]=useState(0);
+  const [refreshing,setRefreshing]=useState(false);
   const url=`${process.env.EXPO_PUBLIC_API_URL}/users`;
-  useFocusEffect(useCallback(()=>{let active=true;if(user?.role==='ADMIN'&&token)requestJson(url,{headers:{Authorization:`Bearer ${token}`}}).then(result=>{if(active)setEmployees(result.employees);}).catch(()=>{if(active)setError('No fue posible cargar los trabajadores.');});return()=>{active=false;};},[url,token,user?.role,attempt]));
+  useFocusEffect(useCallback(()=>{let active=true;if(user?.role==='ADMIN'&&token){setRefreshing(true);setError('');requestJson(url,{headers:{Authorization:`Bearer ${token}`}}).then(result=>{if(active)setEmployees(result.employees);}).catch(()=>{if(active)setError('No fue posible cargar los trabajadores.');}).finally(()=>{if(active)setRefreshing(false);});}return()=>{active=false;};},[url,token,user?.role,attempt]));
   if(user?.role!=='ADMIN')return <Redirect href="/(protected)/(tabs)/profile"/>;
   async function save(){if(!selected||busy)return;setError('');if(!reason.trim()){setError('Indica el motivo del cambio.');return;}setBusy(true);
     try{const result=await requestJson(`${url}/${selected.Id}`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({firstName:selected.FirstName,lastName:selected.LastName,email:selected.Email,phone:selected.Phone??'',reason})});setMessage(result.message);setSelected(null);setAttempt(n=>n+1);}
     catch(err){setError(err instanceof Error?err.message:'No fue posible guardar.');}finally{setBusy(false);}}
-  return <AppContainer><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{gap:12,paddingBottom:30,width:'100%',maxWidth:1050,alignSelf:'center'}}>
+  return <AppContainer><RefreshableScrollView refreshing={refreshing} onRefresh={()=>setAttempt(n=>n+1)} keyboardShouldPersistTaps="handled" contentContainerStyle={{gap:12,paddingBottom:30,width:'100%',maxWidth:1050,alignSelf:'center'}}>
     <Text style={{fontSize:26,fontWeight:'700',color:Colors.text}}>Equipo y rendiciones</Text><Text style={{color:Colors.textSecondary,fontSize:12,lineHeight:19}}>Selecciona un integrante para revisar sus boletas. Incluye trabajadores y administradores.</Text>
     <Pressable accessibilityRole="button" onPress={()=>router.push('/(protected)/employees/create')} style={{alignSelf:'flex-start',paddingHorizontal:16,paddingVertical:11,borderRadius:11,backgroundColor:Colors.primary}}><Text style={{color:'white',fontSize:13,fontWeight:'700'}}>+ Registrar trabajador</Text></Pressable>
     {message?<Text accessibilityRole="alert" style={{color:Colors.primary}}>{message}</Text>:null}{error?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{error}</Text>:null}
@@ -36,5 +38,5 @@ export default function Employees(){
       {employee.Role==='EMPLOYEE'?<Pressable accessibilityRole="button" accessibilityLabel={`Editar trabajador ${employee.FirstName} ${employee.LastName}`} onPress={()=>{setSelected({...employee});setReason('');setError('');setMessage('');}} style={{paddingHorizontal:13,paddingVertical:10,borderRadius:10,backgroundColor:'#E7F3EF'}}><Text style={{color:Colors.primary,fontSize:12,fontWeight:'600'}}>Editar</Text></Pressable>:null}</View>
     </View>)}
     <Pressable accessibilityRole="button" onPress={()=>router.replace('/(protected)/(tabs)/profile')} style={{alignSelf:'flex-start',paddingVertical:12}}><Text style={{color:Colors.primary,fontSize:12,fontWeight:'600'}}>← Volver al perfil</Text></Pressable>
-  </ScrollView></AppContainer>;
+  </RefreshableScrollView></AppContainer>;
 }

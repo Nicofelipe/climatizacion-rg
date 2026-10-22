@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { availablePeriodOptions } from '@/utils/periodOptions';
 import { Colors } from '@/theme';
+import RefreshableScrollView from './RefreshableScrollView';
 
 const avatars = [
   { name: 'Iniciales', icon: null, color: '#0F8277', light: '#DDF4ED' },
@@ -24,7 +25,7 @@ export default function ProfileOverview() {
   const [choosing, setChoosing] = useState(false);
   const [message, setMessage] = useState('');
   const fade = useRef(new Animated.Value(0)).current;
-  const { data } = useExpenseDashboard(token, availablePeriodOptions(0).currentPeriod, 'month');
+  const { data,loading,reload } = useExpenseDashboard(token, availablePeriodOptions(0).currentPeriod, 'month');
   const admin = user?.role === 'ADMIN';
   const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase();
   const key = `profile-avatar:${user?.companyId}:${user?.id}`;
@@ -40,7 +41,7 @@ export default function ProfileOverview() {
     try { await AsyncStorage.setItem(key, String(index)); setAvatar(index); setChoosing(false); setMessage('Avatar actualizado en este dispositivo.'); }
     catch { setMessage('No pudimos guardar el avatar. Inténtalo nuevamente.'); }
   }
-  return <SafeAreaView style={s.page} edges={['top', 'left', 'right']}><ScrollView contentContainerStyle={s.content}>
+  return <SafeAreaView style={s.page} edges={['top', 'left', 'right']}><RefreshableScrollView refreshing={loading} onRefresh={reload} contentContainerStyle={s.content}>
     <Text style={s.eyebrow}>TU ESPACIO PERSONAL</Text><Text style={s.title}>Mi perfil</Text>
     <Text style={s.subtitle}>Tu cuenta, tu identidad y todo listo para seguir.</Text>
     <Animated.View style={[s.hero, { opacity: fade, transform: [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
@@ -69,7 +70,7 @@ export default function ProfileOverview() {
     <View style={s.privacy}><Ionicons name="lock-closed-outline" size={23} color={Colors.primary} /><View style={{ flex: 1, gap: 5 }}><Text style={s.label}>Un espacio para tu empresa</Text><Text style={s.hint}>{admin ? 'Tu acceso está limitado a la información de tu empresa.' : 'Tu cuenta te permite consultar tus propias boletas. El respaldo de imágenes lo gestiona tu empresa.'}</Text></View></View>
     <Pressable accessibilityRole="button" onPress={logout} style={s.logout}><Ionicons name="log-out-outline" size={21} color="#B94141" /><Text style={s.logoutText}>Cerrar sesión</Text></Pressable>
     <Text style={s.footer}>Cada boleta cuenta. Gracias por mantener tus registros al día.</Text>
-  </ScrollView>
+  </RefreshableScrollView>
     <Modal visible={choosing} transparent animationType="fade" onRequestClose={() => setChoosing(false)}><View style={s.overlay}><View style={s.dialog} accessibilityViewIsModal>
       <View style={s.dialogHeader}><Text style={s.section}>Elige tu avatar</Text><Pressable accessibilityRole="button" accessibilityLabel="Cerrar selector de avatar" onPress={() => setChoosing(false)}><Ionicons name="close" size={25} color={Colors.text} /></Pressable></View>
       <Text style={s.hint}>Dale un toque tuyo. Se guarda en este dispositivo para tu cuenta.</Text>

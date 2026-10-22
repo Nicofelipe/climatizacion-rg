@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ExpenseStatus from './ExpenseStatus';
 import ExpenseScopeSelector from './ExpenseScopeSelector';
 import ReceiptDateFilter from './ReceiptDateFilter';
+import { useWebPullRefresh } from './RefreshableScrollView';
 import { requestJson } from '@/api/http';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -27,6 +28,7 @@ function typeIcon(type: string) {
 export default function ExpensesOverview() {
   const { user, token } = useAuth();
   const { expenses, isLoading, error, reload } = useExpenses(token);
+  const {handlers,control,refresh}=useWebPullRefresh(isLoading,reload);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
   const params=useLocalSearchParams<{workerId?:string;view?:string;review?:string}>();
@@ -58,9 +60,10 @@ export default function ExpensesOverview() {
   const approved = scoped.filter(item => item.Status === 'APPROVED').length;
 
   return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
-    <FlatList data={visible} keyExtractor={item => String(item.Id)} refreshing={isLoading} onRefresh={reload}
+    <FlatList {...handlers} scrollEventThrottle={16} alwaysBounceVertical data={visible} keyExtractor={item => String(item.Id)} refreshing={isLoading} onRefresh={refresh}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       ListHeaderComponent={<View style={{ gap: 22, marginBottom: 16 }}>
+        {control}
         <View style={styles.row}>
           <View style={{ flex: 1 }}><Text style={styles.eyebrow}>BOLETAS Y RESPALDOS</Text><Text style={styles.title}>{user?.role === 'ADMIN'&&scope==='company' ? 'Boletas de tu empresa' : 'Mis boletas'}</Text></View>
           <View style={styles.headerIcon}><Ionicons name="receipt-outline" size={25} color={Colors.primary} /></View>

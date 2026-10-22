@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DashboardPeriodSelector from './DashboardPeriodSelector';
 import { ExpenseDonut, ExpenseLine, percent } from './ReportCharts';
 import ExpenseScopeSelector from './ExpenseScopeSelector';
+import RefreshableScrollView from './RefreshableScrollView';
 import { availablePeriodOptions } from '@/utils/periodOptions';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { useAuth } from '@/hooks/useAuth';
@@ -35,7 +36,7 @@ export default function ReportsOverview() {
   const peakTies = peak ? points.filter(point => point.amount === peak.amount).length : 0;
 
   return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
-    <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor={Colors.primary} />}>
+    <RefreshableScrollView contentContainerStyle={styles.content} refreshing={loading} onRefresh={reload}>
       <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.eyebrow}>TUS NÚMEROS, CON CLARIDAD</Text><Text style={styles.title}>Reportes</Text></View><View style={styles.headerIcon}><Ionicons name="analytics-outline" size={27} color={Colors.primary} /></View></View>
       <Text style={styles.subtitle}>{user?.role === 'ADMIN' ? 'Una mirada completa a los gastos de tu empresa.' : 'Entiende cómo se distribuyen tus gastos y cómo cambian en el tiempo.'}</Text>
       {user?.role==='ADMIN'?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}
@@ -84,7 +85,7 @@ export default function ReportsOverview() {
         </View>
         <Text style={styles.footnote}>Montos en CLP · gasto incluye pendientes y aprobadas; excluye rechazadas.{ '\n' }{data.companyName} · {data.scope === 'personal' ? 'Información de tus propias boletas' : 'Información de tu empresa'}</Text>
       </> : null}
-    </ScrollView>
+    </RefreshableScrollView>
   </SafeAreaView>;
 }
 
