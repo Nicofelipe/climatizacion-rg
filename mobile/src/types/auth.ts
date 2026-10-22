@@ -4,6 +4,7 @@ export interface LoginRequest {
 }
 
 export interface AuthUser {
+  passwordPolicy?: {mustChangePassword:boolean;deadline:string|null;remainingSeconds:number|null;expired:boolean};
   id: number;
   companyId: number;
   firstName: string;

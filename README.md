@@ -3,6 +3,12 @@ Mobile application for managing expenses, receipts, annual reports and business 
 
 ## Guías
 
+- [Recuperar contraseña por correo y registrar supervisores](docs/RECUPERAR-CONTRASENA.md).
+
+- [Contraseña inicial, primer acceso y plazo de 48 horas](docs/CONTRASENA-INICIAL.md).
+
+- [Configurar el inicio de sesión con Google](docs/INICIAR-SESION-CON-GOOGLE.md).
+
 - [Rendiciones del supervisor, aprobación propia y filtros](docs/RENDICIONES-DEL-SUPERVISOR.md).
 
 - [Flujo de Git, commits, pruebas y entrega a producción](docs/FLUJO-GIT-Y-ENTREGAS.md).

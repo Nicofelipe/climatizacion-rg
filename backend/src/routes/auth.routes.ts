@@ -1,6 +1,9 @@
 import { Router } from 'express';
 
 import { loginController } from '../controllers/auth.controller';
+import googleLoginRoutes from './googleLogin.routes';
+import passwordRoutes from './password.routes';
+import passwordRecoveryRoutes from './passwordRecovery.routes';
 import {
     AuthenticatedRequest,
     authenticateToken,
@@ -8,6 +11,9 @@ import {
 import { requireRole } from '../middlewares/role.middleware';
 
 const router = Router();
+router.use(passwordRecoveryRoutes);
+router.use(passwordRoutes);
+router.use('/google',googleLoginRoutes);
 
 router.post('/login', loginController);
 

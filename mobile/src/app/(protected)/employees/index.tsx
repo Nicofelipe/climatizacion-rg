@@ -14,6 +14,7 @@ export default function Employees(){
   const {user,token}=useAuth();const [employees,setEmployees]=useState<Employee[]>([]);const [selected,setSelected]=useState<Employee|null>(null);
   const [reason,setReason]=useState('');const [message,setMessage]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [attempt,setAttempt]=useState(0);
   const [refreshing,setRefreshing]=useState(false);
+  useFocusEffect(useCallback(()=>()=>{setSelected(null);setReason('');setError('');setMessage('');},[]));
   const url=`${process.env.EXPO_PUBLIC_API_URL}/users`;
   useFocusEffect(useCallback(()=>{let active=true;if(user?.role==='ADMIN'&&token){setRefreshing(true);setError('');requestJson(url,{headers:{Authorization:`Bearer ${token}`}}).then(result=>{if(active)setEmployees(result.employees);}).catch(()=>{if(active)setError('No fue posible cargar los trabajadores.');}).finally(()=>{if(active)setRefreshing(false);});}return()=>{active=false;};},[url,token,user?.role,attempt]));
   if(user?.role!=='ADMIN')return <Redirect href="/(protected)/(tabs)/profile"/>;
@@ -22,9 +23,9 @@ export default function Employees(){
     catch(err){setError(err instanceof Error?err.message:'No fue posible guardar.');}finally{setBusy(false);}}
   return <AppContainer><RefreshableScrollView refreshing={refreshing} onRefresh={()=>setAttempt(n=>n+1)} keyboardShouldPersistTaps="handled" contentContainerStyle={{gap:12,paddingBottom:30,width:'100%',maxWidth:1050,alignSelf:'center'}}>
     <Text style={{fontSize:26,fontWeight:'700',color:Colors.text}}>Equipo y rendiciones</Text><Text style={{color:Colors.textSecondary,fontSize:12,lineHeight:19}}>Selecciona un integrante para revisar sus boletas. Incluye trabajadores y administradores.</Text>
-    <Pressable accessibilityRole="button" onPress={()=>router.push('/(protected)/employees/create')} style={{alignSelf:'flex-start',paddingHorizontal:16,paddingVertical:11,borderRadius:11,backgroundColor:Colors.primary}}><Text style={{color:'white',fontSize:13,fontWeight:'700'}}>+ Registrar trabajador</Text></Pressable>
+    <Pressable accessibilityRole="button" onPress={()=>router.push('/(protected)/employees/create')} style={{alignSelf:'flex-start',paddingHorizontal:16,paddingVertical:11,borderRadius:11,backgroundColor:Colors.primary}}><Text style={{color:'white',fontSize:13,fontWeight:'700'}}>+ Registrar integrante</Text></Pressable>
     {message?<Text accessibilityRole="alert" style={{color:Colors.primary}}>{message}</Text>:null}{error?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{error}</Text>:null}
-    {selected?<View style={{gap:14,padding:20,backgroundColor:'white',borderRadius:20}}>
+    {selected?<View style={{gap:14,padding:20,backgroundColor:'white',borderRadius:20,width:'100%',maxWidth:580}}>
       <Input label="Nombre" value={selected.FirstName} onChangeText={value=>setSelected({...selected,FirstName:value})}/>
       <Input label="Apellido" value={selected.LastName} onChangeText={value=>setSelected({...selected,LastName:value})}/>
       <Input label="Correo de acceso" value={selected.Email} onChangeText={value=>setSelected({...selected,Email:value})} keyboardType="email-address"/>

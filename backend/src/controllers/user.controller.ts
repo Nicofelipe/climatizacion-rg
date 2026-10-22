@@ -2,6 +2,7 @@ import { Response } from 'express';
 
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { createEmployee } from '../services/user.service';
+import { validNewPassword,passwordRequirementsMessage } from '../utils/passwordRequirements';
 
 export async function createEmployeeController(
     req: AuthenticatedRequest,
@@ -26,7 +27,9 @@ export async function createEmployeeController(
             email,
             password,
             phone,
+            role='EMPLOYEE',
         } = req.body;
+        if(role!=='EMPLOYEE'&&role!=='ADMIN'){res.status(400).json({message:'Selecciona trabajador o supervisor / administrador.'});return;}
 
         if (
             typeof firstName !== 'string' ||
@@ -44,10 +47,10 @@ export async function createEmployeeController(
             return;
         }
 
-        if (password.length < 8) {
+        if (!validNewPassword(password)) {
             res.status(400).json({
                 message:
-                    'Password must contain at least 8 characters',
+                    passwordRequirementsMessage,
             });
             return;
         }
@@ -67,6 +70,8 @@ export async function createEmployeeController(
             email,
             password,
             phone,
+            role,
+            actorId:req.user.userId,
         });
 
         res.status(201).json({
@@ -76,13 +81,15 @@ export async function createEmployeeController(
     } catch (error) {
         if (
             error instanceof Error &&
-            error.message === 'EMAIL_ALREADY_EXISTS'
+            error.message.includes('EMAIL_ALREADY_EXISTS')
         ) {
             res.status(409).json({
                 message: 'Email already exists',
             });
             return;
         }
+
+        if(error instanceof Error&&error.message.includes('CREATE_USER_FORBIDDEN')){res.status(403).json({message:'Tu cuenta ya no tiene permiso para registrar integrantes.'});return;}
 
         console.error(
             'Create employee error:',

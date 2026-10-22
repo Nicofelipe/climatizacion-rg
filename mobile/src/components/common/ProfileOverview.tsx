@@ -63,6 +63,8 @@ export default function ProfileOverview() {
       <Text style={s.hint}>Para actualizar tu nombre o correo, contacta al administrador de tu empresa.</Text>
     </View>
     <View style={s.panel}><Text style={s.section}>A tu alcance</Text>
+      <Action icon="key-outline" title="Cambiar contraseña" description="Actualiza tu contraseña de acceso" onPress={()=>router.push('/(protected)/change-password')}/>
+      <Action icon="mail-outline" title="Recuperar contraseña por correo" description="Si no recuerdas tu contraseña actual" onPress={()=>router.push('/(auth)/forgot-password')}/>
       <Action icon="receipt-outline" title={admin ? 'Boletas de la empresa' : 'Mis boletas'} description="Revisa los registros y sus estados" onPress={() => router.push('/(protected)/(tabs)/expenses')} />
       <Action icon="analytics-outline" title="Reportes" description="Descubre cómo evolucionan los gastos" onPress={() => router.push('/(protected)/(tabs)/reports')} />
       {admin ? <><Action icon="people-outline" title="Gestionar trabajadores" description="Registra y actualiza los datos de tu equipo" onPress={() => router.push('/(protected)/employees')} /><Action icon="cloud-outline" title="Conexión de Google Drive" description="Gestiona la conexión del respaldo de tu empresa" onPress={() => router.push('/(protected)/storage')} /></> : null}

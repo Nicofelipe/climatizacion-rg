@@ -1,4 +1,5 @@
 export interface CreateEmployeeRequest {
+  role?:'EMPLOYEE'|'ADMIN';
   firstName: string;
   lastName: string;
   email: string;

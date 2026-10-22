@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { getPasswordAccount,passwordPolicy } from '../services/passwordPolicy.service';
 
 interface AuthTokenPayload {
+  passwordVersion?:number;
   userId: number;
   companyId: number;
   role: string;
@@ -11,7 +13,7 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthTokenPayload;
 }
 
-export function authenticateToken(
+export async function authenticateToken(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
@@ -47,7 +49,16 @@ export function authenticateToken(
     }
 
     req.user = payload;
-
+    let account;
+    try{account=await getPasswordAccount(payload.companyId,payload.userId);}
+    catch{res.status(503).json({message:'No fue posible verificar la sesión. Inténtalo nuevamente.'});return;}
+    if(!account||account.RoleName!==payload.role||account.PasswordVersion!==(payload.passwordVersion??0)){
+      res.status(401).json({message:'La sesión ya no es válida. Vuelve a iniciar sesión.'});return;
+    }
+    const policy=passwordPolicy(account);
+    if(policy.expired&&!['/password/status','/password/change'].includes(req.path)){
+      res.status(403).json({code:'PASSWORD_CHANGE_REQUIRED',message:'Venció el plazo de la contraseña inicial. Cambia tu contraseña para continuar.'});return;
+    }
     next();
   } catch {
     res.status(401).json({

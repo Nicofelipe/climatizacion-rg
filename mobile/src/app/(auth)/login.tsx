@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Redirect, router } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable,ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing, Typography } from '@/theme';
 
 export default function LoginScreen() {
-  const { login, isLoading, isAuthenticated } = useAuth();
+  const { login, loginWithGoogle, isLoading, isAuthenticated } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -75,6 +75,9 @@ export default function LoginScreen() {
             disabled={!email.trim() || !password}
           />
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <Pressable accessibilityRole="button" onPress={()=>router.push('/(auth)/forgot-password')} style={{paddingVertical:14}}><Text style={{color:Colors.primary,fontWeight:'600',fontSize:13}}>Olvidé mi contraseña</Text></Pressable>
+          <Text style={[styles.help,{textAlign:'center'}]}>o continúa con tu cuenta registrada</Text>
+          <Button title="Continuar con Google" loading={isLoading} disabled={isLoading} onPress={async()=>{setError(null);try{await loginWithGoogle();router.replace('/(protected)/(tabs)');}catch(err){setError(err instanceof Error?err.message:'No fue posible ingresar con Google.');}}}/>
           <Text style={styles.help}>¿No tienes acceso? Solicita al encargado que registre tu correo y te entregue tu contraseña por un canal privado.</Text>
         </View>
       </View>

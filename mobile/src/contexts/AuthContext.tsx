@@ -5,6 +5,7 @@ import {
 } from 'react';
 
 import { AuthService } from '@/services/AuthService';
+import { loginWithGoogle as googleLogin } from '@/services/GoogleLoginService';
 import {
   AuthUser,
   LoginRequest,
@@ -17,6 +18,8 @@ interface AuthContextType {
   isLoading: boolean;
 
   login: (data: LoginRequest) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  replaceSession: (session:{user:AuthUser;token:string})=>void;
   logout: () => void;
 }
 
@@ -48,6 +51,10 @@ export function AuthProvider({
     setUser(null);
     setToken(null);
   }
+  async function loginWithGoogle(){
+    try{setIsLoading(true);const response=await googleLogin();setUser(response.user);setToken(response.token);}
+    finally{setIsLoading(false);}
+  }
 
   return (
     <AuthContext.Provider
@@ -57,6 +64,8 @@ export function AuthProvider({
         isAuthenticated: Boolean(user && token),
         isLoading,
         login,
+        loginWithGoogle,
+        replaceSession:session=>{setUser(session.user);setToken(session.token);},
         logout,
       }}
     >

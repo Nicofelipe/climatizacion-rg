@@ -8,8 +8,10 @@ require.cache[filename] = { id: filename, filename, loaded: true, exports: {
   createEmployee: async input => { created = input; return { Id: 1 }; },
 } };
 const { createEmployeeController } = require('../src/controllers/user.controller.ts');
+const policyFile=require.resolve('../src/services/passwordPolicy.service.ts');
+require.cache[policyFile]={id:policyFile,filename:policyFile,loaded:true,exports:{getPasswordAccount:async(companyId,userId)=>({RoleName:userId===1?'ADMIN':'EMPLOYEE',PasswordVersion:0}),passwordPolicy:()=>({expired:false})}};
 const { authenticateToken } = require('../src/middlewares/auth.middleware.ts');
-const valid = { firstName: 'Ana', lastName: 'Prueba', email: 'ana@example.test', password: 'sample-password' };
+const valid = { firstName: 'Ana', lastName: 'Prueba', email: 'ana@example.test', password: 'SamplePassword123' };
 function response() {
   return { statusCode: 0, status(code) { this.statusCode = code; return this; },
     json(body) { this.body = body; return this; } };
@@ -31,18 +33,20 @@ test('employee account creation authorization and validation', async t => {
       assert.equal(created, undefined);
     });
   }
-  await t.test('company comes from administrator session, not submitted company or role', async () => {
+  await t.test('administrator selects allowed role but cannot select another company', async () => {
     const res = response();
     await createEmployeeController({ user: { role: 'ADMIN', companyId: 4 },
       body: { ...valid, companyId: 99, role: 'ADMIN' } }, res);
     assert.equal(res.statusCode, 201);
     assert.equal(created.companyId, 4);
-    assert.equal(created.role, undefined);
+    assert.equal(created.role, 'ADMIN');
     assert.equal(res.body.employee.PasswordHash, undefined);
   });
+  await t.test('role defaults to employee',async()=>{const res=response();await createEmployeeController({user:{role:'ADMIN',companyId:4},body:valid},res);assert.equal(res.statusCode,201);assert.equal(created.role,'EMPLOYEE');});
+  await t.test('unknown role is rejected',async()=>{const res=response();await createEmployeeController({user:{role:'ADMIN',companyId:4},body:{...valid,role:'OWNER'}},res);assert.equal(res.statusCode,400);});
 });
 
-test('session middleware rejects OAuth state and malformed identity claims', () => {
+test('session middleware rejects OAuth state and malformed identity claims', async () => {
   const previous = process.env.JWT_SECRET;
   process.env.JWT_SECRET = 'isolated-test-secret-only';
   try {
@@ -58,7 +62,7 @@ test('session middleware rejects OAuth state and malformed identity claims', () 
       const req = { headers: { authorization: `Bearer ${token}` } };
       const res = response();
       let nextCalled = false;
-      authenticateToken(req, res, () => { nextCalled = true; });
+      await authenticateToken(req, res, () => { nextCalled = true; });
       assert.equal(nextCalled, allowed);
       if (!allowed) assert.equal(res.statusCode, 401);
     }

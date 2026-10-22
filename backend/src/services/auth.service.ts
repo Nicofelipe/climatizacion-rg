@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import msnodesqlv8 from 'msnodesqlv8';
-import { generateAccessToken } from './token.service';
+
+import { recordSuccessfulLogin,passwordSession } from './passwordPolicy.service';
 
 const connectionString =
     'Driver={ODBC Driver 18 for SQL Server};' +
@@ -80,21 +81,8 @@ export async function loginService(email: string, password: string) {
         throw new Error('INVALID_CREDENTIALS');
     }
 
-    const token = generateAccessToken({
-        userId: user.Id,
-        companyId: user.CompanyId,
-        role: user.RoleName,
-    });
+    const account=await recordSuccessfulLogin(user.CompanyId,user.Id,'PASSWORD');
+    if(account.PasswordHash!==user.PasswordHash)throw new Error('INVALID_CREDENTIALS');
+    return passwordSession(account);
 
-    return {
-        user: {
-            id: user.Id,
-            companyId: user.CompanyId,
-            firstName: user.FirstName,
-            lastName: user.LastName,
-            email: user.Email,
-            role: user.RoleName,
-        },
-        token,
-    };
 }
