@@ -1,20 +1,20 @@
 const Colors = {
-  primary: '#0066CC',
-  primaryDark: '#004C99',
+  primary: '#0F8277',
+  primaryDark: '#0A655D',
 
-  secondary: '#00AEEF',
+  secondary: '#818CF8',
 
   success: '#22C55E',
   warning: '#F59E0B',
   danger: '#EF4444',
 
-  background: '#F5F7FA',
+  background: '#F4F6FA',
   surface: '#FFFFFF',
 
-  text: '#1F2937',
-  textSecondary: '#6B7280',
+  text: '#17233D',
+  textSecondary: '#64748B',
 
-  border: '#E5E7EB',
+  border: '#E4E9F2',
 
   white: '#FFFFFF',
   black: '#000000',

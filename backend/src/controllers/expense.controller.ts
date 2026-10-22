@@ -1,4 +1,12 @@
 import { Response } from 'express';
+import fs from 'fs/promises';
+import { driveUnavailableMessage, isDriveAuthorizationError, safeErrorMessage } from '../utils/storageError';
+
+import {
+    deleteGoogleDriveFile,
+    moveExpenseFileInGoogleDrive,
+    uploadExpenseFileToGoogleDrive,
+} from '../services/googleDrive.service';
 
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import {
@@ -6,39 +14,53 @@ import {
     deleteExpense,
     getExpenseById,
     getExpenses,
+    rollbackCreatedExpense,
+    rollbackUpdatedExpense,
     updateExpense,
 } from '../services/expense.service';
 
-import { createExpenseFile } from '../services/file.service';
+import {
+    createExpenseFile,
+    getExpenseFile,
+    rollbackCreatedExpenseFile,
+    rollbackUpdatedExpenseFile,
+    updateExpenseFile,
+} from '../services/file.service';
+
+function normalizeDateOnly(
+    value: Date | string
+): string {
+    if (value instanceof Date) {
+        const year = value.getUTCFullYear();
+
+        const month = String(
+            value.getUTCMonth() + 1
+        ).padStart(2, '0');
+
+        const day = String(
+            value.getUTCDate()
+        ).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
+    }
+
+    return String(value).slice(0, 10);
+}
 
 export async function createExpenseController(
     req: AuthenticatedRequest,
     res: Response
 ) {
+    const temporaryFilePath = req.file?.path ?? null;
+
+    /*
+     * Los utilizamos para compensar la operación
+     * si algo falla después de crear recursos.
+     */
+    let createdExpenseId: number | null = null;
+    let newDriveFileId: string | null = null;
+
     try {
-        const {
-            expenseTypeId,
-            supplierId,
-            receiptNumber,
-            expenseDate,
-            totalAmount,
-            description,
-        } = req.body;
-
-        console.log('Uploaded file:', req.file);
-
-        if (
-            !expenseTypeId ||
-            !receiptNumber ||
-            !expenseDate ||
-            !totalAmount
-        ) {
-            res.status(400).json({
-                message: 'Missing required fields',
-            });
-            return;
-        }
-
         if (!req.user) {
             res.status(401).json({
                 message: 'Authentication required',
@@ -46,38 +68,249 @@ export async function createExpenseController(
             return;
         }
 
-        const expense = await createExpense({
-            companyId: req.user.companyId,
-            userId: req.user.userId,
-            expenseTypeId,
-            supplierId,
-            receiptNumber,
-            expenseDate,
-            totalAmount,
-            description,
-        });
+        const expenseTypeId = Number(
+            req.body.expenseTypeId
+        );
 
-        if (req.file) {
-            await createExpenseFile({
-                companyId: req.user.companyId,
-                expenseId: expense.Id,
-                fileName: req.file.filename,
-                originalFileName: req.file.originalname,
-                mimeType: req.file.mimetype,
-                fileSize: req.file.size,
+        const totalAmount = Number(
+            req.body.totalAmount
+        );
+
+        const supplierId =
+            req.body.supplierId
+                ? Number(req.body.supplierId)
+                : null;
+
+        const receiptNumber =
+            req.body.receiptNumber;
+
+        const expenseDate =
+            req.body.expenseDate;
+
+        const description =
+            req.body.description || null;
+
+        if (
+            !Number.isInteger(expenseTypeId) ||
+            expenseTypeId <= 0 ||
+            !receiptNumber ||
+            !expenseDate ||
+            !Number.isFinite(totalAmount) ||
+            totalAmount <= 0
+        ) {
+            res.status(400).json({
+                message:
+                    'Missing or invalid required fields',
             });
+            return;
         }
 
+        if (
+            supplierId !== null &&
+            (
+                !Number.isInteger(supplierId) ||
+                supplierId <= 0
+            )
+        ) {
+            res.status(400).json({
+                message: 'Invalid supplier id',
+            });
+            return;
+        }
+
+        if (!req.file) {
+            res.status(400).json({
+                message: 'La imagen de la boleta es obligatoria',
+            });
+            return;
+        }
+
+        /*
+         * 1. Crear Expense.
+         */
+        const expense =
+            await createExpense({
+                companyId:
+                    req.user.companyId,
+
+                userId:
+                    req.user.userId,
+
+                expenseTypeId,
+                supplierId,
+                receiptNumber,
+                expenseDate,
+                totalAmount,
+                description,
+            });
+
+        createdExpenseId = expense.Id;
+
+        /*
+         * 2. Si existe imagen, subirla a Drive.
+         */
+        if (req.file) {
+            const driveFile =
+                await uploadExpenseFileToGoogleDrive({
+                    expenseId: expense.Id,
+                    receiptNumber,
+                    companyId:
+                        req.user.companyId,
+
+                    expenseDate,
+
+                    localFilePath:
+                        req.file.path,
+
+                    fileName:
+                        req.file.filename,
+
+                    mimeType:
+                        req.file.mimetype,
+                });
+
+            newDriveFileId =
+                driveFile.id;
+
+
+            /*
+             * 3. Registrar la imagen en SQL.
+             */
+            await createExpenseFile({
+                companyId:
+                    req.user.companyId,
+
+                expenseId:
+                    expense.Id,
+
+                provider:
+                    'GOOGLE_DRIVE',
+
+                providerFileId:
+                    driveFile.id,
+
+                originalFileName:
+                    req.file.originalname,
+
+                mimeType:
+                    req.file.mimetype,
+
+                fileSize:
+                    req.file.size,
+            });
+
+            /*
+             * Drive + dbo.File quedaron correctos.
+             * Ya no consideramos el archivo como
+             * pendiente de compensación.
+             */
+            newDriveFileId = null;
+        }
+
+        /*
+         * Todo terminó correctamente.
+         */
+        createdExpenseId = null;
+
         res.status(201).json({
-            message: 'Expense created successfully',
+            message:
+                'Expense created successfully',
             expense,
         });
     } catch (error) {
-        console.error('Create expense error:', error);
+        /*
+         * Si alcanzamos a subir una imagen a
+         * Drive pero algo posterior falló,
+         * intentamos eliminarla.
+         */
+        if (
+            newDriveFileId &&
+            req.user
+        ) {
+            try {
+                await deleteGoogleDriveFile(
+                    req.user.companyId,
+                    newDriveFileId
+                );
+
+                newDriveFileId = null;
+            } catch (
+            driveCleanupError
+            ) {
+                console.error(
+                    'Google Drive rollback error:',
+                    driveCleanupError
+                );
+            }
+        }
+
+        /*
+         * Si Expense alcanzó a crearse pero la
+         * operación completa falló, lo retiramos.
+         */
+        if (
+            createdExpenseId &&
+            req.user
+        ) {
+            try {
+                await rollbackCreatedExpense(
+                    req.user.companyId,
+                    createdExpenseId
+                );
+
+                createdExpenseId = null;
+            } catch (
+            expenseRollbackError
+            ) {
+                console.error(
+                    'Expense rollback error:',
+                    expenseRollbackError
+                );
+            }
+        }
+
+        if (
+            error instanceof Error &&
+            error.message ===
+            'RECEIPT_NUMBER_ALREADY_EXISTS'
+        ) {
+            res.status(409).json({
+                message:
+                    'A receipt with this number already exists',
+            });
+            return;
+        }
+
+        console.error('Create expense error:', safeErrorMessage(error));
+
+        if (isDriveAuthorizationError(error)) {
+            res.status(409).json({
+                code: 'DRIVE_RECONNECT_REQUIRED',
+                message: driveUnavailableMessage(req.user?.role ?? 'EMPLOYEE'),
+            });
+            return;
+        }
 
         res.status(500).json({
-            message: 'Internal server error',
+            message:
+                'Internal server error',
         });
+    } finally {
+        /*
+         * uploads/ siempre es temporal.
+         */
+        if (temporaryFilePath) {
+            try {
+                await fs.unlink(
+                    temporaryFilePath
+                );
+            } catch (cleanupError) {
+                console.error(
+                    'Temporary file cleanup error:',
+                    cleanupError
+                );
+            }
+        }
     }
 }
 
@@ -94,7 +327,9 @@ export async function getExpensesController(
         }
 
         const expenses = await getExpenses(
-            req.user.companyId
+            req.user.companyId,
+            req.user.userId,
+            req.user.role
         );
 
         res.status(200).json({
@@ -132,7 +367,9 @@ export async function getExpenseByIdController(
 
         const expense = await getExpenseById(
             req.user.companyId,
-            expenseId
+            expenseId,
+            req.user.userId,
+            req.user.role
         );
 
         if (!expense) {
@@ -158,6 +395,18 @@ export async function updateExpenseController(
     req: AuthenticatedRequest,
     res: Response
 ) {
+    const temporaryFilePath = req.file?.path ?? null;
+    let newDriveFileId: string | null = null;
+
+    let expenseWasUpdated = false;
+    let originalExpenseForRollback: any = null;
+
+    let fileWasUpdated = false;
+    let originalFileForRollback: any = null;
+    let fileWasCreated = false;
+
+    let expenseId: number | null = null;
+
     try {
         if (!req.user) {
             res.status(401).json({
@@ -166,64 +415,569 @@ export async function updateExpenseController(
             return;
         }
 
-        const expenseId = Number(req.params.id);
+        expenseId = Number(req.params.id);
 
-        if (!Number.isInteger(expenseId) || expenseId <= 0) {
+        if (
+            !Number.isInteger(expenseId) ||
+            expenseId <= 0
+        ) {
             res.status(400).json({
                 message: 'Invalid expense id',
             });
             return;
         }
 
-        const {
-            expenseTypeId,
-            supplierId,
-            receiptNumber,
-            expenseDate,
-            totalAmount,
-            description,
-        } = req.body;
+        /*
+         * Con multipart/form-data los valores
+         * llegan como strings.
+         */
+        const expenseTypeId = Number(
+            req.body.expenseTypeId
+        );
+
+        const totalAmount = Number(
+            req.body.totalAmount
+        );
+
+        const supplierId =
+            req.body.supplierId
+                ? Number(req.body.supplierId)
+                : null;
+
+        const receiptNumber =
+            req.body.receiptNumber;
+
+        const expenseDate =
+            req.body.expenseDate;
+
+        const description =
+            req.body.description || null;
 
         if (
-            !expenseTypeId ||
+            !Number.isInteger(expenseTypeId) ||
+            expenseTypeId <= 0 ||
             !receiptNumber ||
             !expenseDate ||
-            !totalAmount
+            !Number.isFinite(totalAmount) ||
+            totalAmount <= 0
         ) {
             res.status(400).json({
-                message: 'Missing required fields',
+                message:
+                    'Missing or invalid required fields',
             });
             return;
         }
 
-        const expense = await updateExpense({
-            companyId: req.user.companyId,
-            expenseId,
-            expenseTypeId,
-            supplierId,
-            receiptNumber,
-            expenseDate,
-            totalAmount,
-            description,
-        });
+        if (
+            supplierId !== null &&
+            (
+                !Number.isInteger(supplierId) ||
+                supplierId <= 0
+            )
+        ) {
+            res.status(400).json({
+                message: 'Invalid supplier id',
+            });
+            return;
+        }
 
-        if (!expense) {
+        /*
+         * Obtenemos primero la boleta original.
+         *
+         * Esto también aplica la seguridad que
+         * ya implementamos:
+         *
+         * EMPLOYEE → solamente las propias
+         * ADMIN    → todas las de su empresa
+         */
+        const originalExpense =
+            await getExpenseById(
+                req.user.companyId,
+                expenseId,
+                req.user.userId,
+                req.user.role
+            );
+
+        if (!originalExpense) {
             res.status(404).json({
                 message: 'Expense not found',
             });
             return;
         }
 
+        originalExpenseForRollback =
+            originalExpense;
+
+        /*
+         * Todos los roles solamente pueden editar
+         * una boleta PENDING.
+         */
+        if (
+            originalExpense.Status !== 'PENDING'
+        ) {
+            res.status(409).json({
+                message:
+                    'Only pending expenses can be edited',
+            });
+            return;
+        }
+
+        const currentFile =
+            await getExpenseFile(
+                req.user.companyId,
+                expenseId
+            );
+
+        originalFileForRollback =
+            currentFile;
+
+        /*
+         * =================================================
+         * CASO 1:
+         * El usuario seleccionó una imagen nueva.
+         * =================================================
+         *
+         * Primero subimos la nueva.
+         * Todavía NO eliminamos la anterior.
+         */
+        if (req.file) {
+            const driveFile =
+                await uploadExpenseFileToGoogleDrive({
+                    expenseId,
+                    receiptNumber,
+                    companyId:
+                        req.user.companyId,
+
+                    expenseDate,
+
+                    localFilePath:
+                        req.file.path,
+
+                    fileName:
+                        req.file.filename,
+
+                    mimeType:
+                        req.file.mimetype,
+                });
+
+            newDriveFileId =
+                driveFile.id;
+        }
+
+        /*
+         * Actualizamos los datos de la boleta.
+         *
+         * updateExpense vuelve a comprobar
+         * permisos y estado a nivel SQL.
+         */
+        const expense =
+            await updateExpense({
+                companyId:
+                    req.user.companyId,
+
+                userId:
+                    req.user.userId,
+
+                role:
+                    req.user.role,
+
+                expenseId,
+                expenseTypeId,
+                supplierId,
+                receiptNumber,
+                expenseDate,
+                totalAmount,
+                description,
+            });
+
+        if (!expense) {
+            /*
+             * Si ya habíamos subido una imagen
+             * nueva pero el UPDATE no fue posible,
+             * la eliminamos de Drive.
+             */
+            if (newDriveFileId) {
+                try {
+                    await deleteGoogleDriveFile(
+                        req.user.companyId,
+                        newDriveFileId
+                    );
+
+                    newDriveFileId = null;
+                } catch (
+                compensationError
+                ) {
+                    console.error(
+                        'Google Drive compensation error:',
+                        compensationError
+                    );
+                }
+            }
+
+            res.status(404).json({
+                message: 'Expense not found',
+            });
+            return;
+        }
+
+        expenseWasUpdated = true;
+        /*
+         * =================================================
+         * CASO 2:
+         * Hay una imagen nueva.
+         * =================================================
+         */
+        if (
+            req.file &&
+            newDriveFileId
+        ) {
+            if (currentFile) {
+                /*
+                 * Cambiamos dbo.File para que
+                 * apunte a la imagen nueva.
+                 */
+                const updatedFile =
+                    await updateExpenseFile({
+                        companyId:
+                            req.user.companyId,
+
+                        expenseId,
+
+                        provider:
+                            'GOOGLE_DRIVE',
+
+                        providerFileId:
+                            newDriveFileId,
+
+                        originalFileName:
+                            req.file.originalname,
+
+                        mimeType:
+                            req.file.mimetype,
+
+                        fileSize:
+                            req.file.size,
+                    });
+
+                if (!updatedFile) {
+                    throw new Error(
+                        'EXPENSE_FILE_UPDATE_FAILED'
+                    );
+                }
+
+                fileWasUpdated = true;
+
+                /*
+                 * La base de datos ya apunta al
+                 * archivo nuevo.
+                 *
+                 * Ahora podemos eliminar el antiguo.
+                 */
+                if (
+                    currentFile.Provider ===
+                    'GOOGLE_DRIVE' &&
+                    currentFile.ProviderFileId !==
+                    newDriveFileId
+                ) {
+                    try {
+                        await deleteGoogleDriveFile(
+                            req.user.companyId,
+                            currentFile.ProviderFileId
+                        );
+                    } catch (
+                    deleteOldFileError
+                    ) {
+                        /*
+                         * No rompemos la edición:
+                         * SQL ya apunta correctamente
+                         * al archivo nuevo.
+                         *
+                         * Este archivo antiguo queda
+                         * pendiente de limpieza.
+                         */
+                        console.error(
+                            'Old Google Drive file cleanup error:',
+                            deleteOldFileError
+                        );
+                    }
+                }
+            } else {
+                /*
+                 * La boleta no tenía imagen.
+                 * Creamos su registro dbo.File.
+                 */
+                await createExpenseFile({
+                    companyId:
+                        req.user.companyId,
+
+                    expenseId,
+
+                    provider:
+                        'GOOGLE_DRIVE',
+
+                    providerFileId:
+                        newDriveFileId,
+
+                    originalFileName:
+                        req.file.originalname,
+
+                    mimeType:
+                        req.file.mimetype,
+
+                    fileSize:
+                        req.file.size,
+                });
+
+                fileWasCreated = true;
+
+            }
+
+            /*
+             * La imagen nueva ya quedó registrada
+             * correctamente en dbo.File.
+             */
+            newDriveFileId = null;
+        }
+
+        /*
+         * =================================================
+         * CASO 3:
+         * Sin imagen nueva: sincronizar nombre y carpeta con los datos actuales.
+         * =================================================
+         */
+        if (
+            !req.file &&
+            currentFile &&
+            currentFile.Provider ===
+            'GOOGLE_DRIVE'
+        ) {
+            await moveExpenseFileInGoogleDrive({
+                expenseId,
+                companyId:
+                    req.user.companyId,
+
+                fileId:
+                    currentFile.ProviderFileId,
+
+                expenseDate,
+            });
+        }
+        expenseWasUpdated = false;
+        fileWasUpdated = false;
+        fileWasCreated = false;
+
+        originalExpenseForRollback = null;
+        originalFileForRollback = null;
+
         res.status(200).json({
-            message: 'Expense updated successfully',
+            message:
+                'Expense updated successfully',
+
             expense,
         });
     } catch (error) {
-        console.error('Update expense error:', error);
+        /*
+  * Si la boleta originalmente no tenía
+  * dbo.File y alcanzamos a crear uno nuevo,
+  * eliminamos ese registro.
+  */
+        if (
+            fileWasCreated &&
+            req.user &&
+            expenseId !== null
+        ) {
+            try {
+                await rollbackCreatedExpenseFile(
+                    req.user.companyId,
+                    expenseId
+                );
+
+                fileWasCreated = false;
+            } catch (fileRollbackError) {
+                console.error(
+                    'Created expense file rollback error:',
+                    fileRollbackError
+                );
+            }
+        }
+        if (
+            fileWasUpdated &&
+            originalFileForRollback &&
+            req.user &&
+            expenseId !== null
+        ) {
+            try {
+                await rollbackUpdatedExpenseFile({
+                    companyId:
+                        req.user.companyId,
+
+                    expenseId,
+
+                    provider:
+                        originalFileForRollback
+                            .Provider,
+
+                    providerFileId:
+                        originalFileForRollback
+                            .ProviderFileId,
+
+                    originalFileName:
+                        originalFileForRollback
+                            .OriginalFileName,
+
+                    mimeType:
+                        originalFileForRollback
+                            .MimeType,
+
+                    fileSize:
+                        originalFileForRollback
+                            .FileSize,
+
+                    updatedAt:
+                        originalFileForRollback
+                            .UpdatedAt,
+                });
+
+                fileWasUpdated = false;
+            } catch (fileRollbackError) {
+                console.error(
+                    'Expense file rollback error:',
+                    fileRollbackError
+                );
+            }
+        }
+        /*
+         * Si habíamos subido una imagen nueva
+         * y algo falló después, intentamos
+         * eliminarla de Google Drive.
+         */
+        if (
+            newDriveFileId &&
+            req.user
+        ) {
+            try {
+                await deleteGoogleDriveFile(
+                    req.user.companyId,
+                    newDriveFileId
+                );
+
+                newDriveFileId = null;
+            } catch (compensationError) {
+                console.error(
+                    'Google Drive compensation error:',
+                    compensationError
+                );
+            }
+        }
+
+        /*
+         * Si el UPDATE de Expense ya se había
+         * realizado, restauramos los datos
+         * originales de la boleta.
+         */
+        if (
+            expenseWasUpdated &&
+            originalExpenseForRollback &&
+            req.user &&
+            expenseId !== null
+        ) {
+            try {
+                await rollbackUpdatedExpense({
+                    companyId:
+                        req.user.companyId,
+
+                    expenseId,
+
+                    expenseTypeId:
+                        originalExpenseForRollback
+                            .ExpenseTypeId,
+
+                    supplierId:
+                        originalExpenseForRollback
+                            .SupplierId,
+
+                    receiptNumber:
+                        originalExpenseForRollback
+                            .ReceiptNumber,
+
+                    expenseDate:
+                        normalizeDateOnly(
+                            originalExpenseForRollback
+                                .ExpenseDate
+                        ),
+
+                    netAmount:
+                        originalExpenseForRollback
+                            .NetAmount,
+
+                    vatAmount:
+                        originalExpenseForRollback
+                            .VatAmount,
+
+                    totalAmount:
+                        originalExpenseForRollback
+                            .TotalAmount,
+
+                    description:
+                        originalExpenseForRollback
+                            .Description,
+                });
+
+                expenseWasUpdated = false;
+            } catch (rollbackError) {
+                console.error(
+                    'Expense update rollback error:',
+                    rollbackError
+                );
+            }
+        }
+
+        /*
+         * Número de boleta duplicado.
+         */
+        if (
+            error instanceof Error &&
+            error.message ===
+            'RECEIPT_NUMBER_ALREADY_EXISTS'
+        ) {
+            res.status(409).json({
+                message:
+                    'A receipt with this number already exists',
+            });
+            return;
+        }
+
+        console.error('Update expense error:', safeErrorMessage(error));
+
+        if (isDriveAuthorizationError(error)) {
+            res.status(409).json({
+                code: 'DRIVE_RECONNECT_REQUIRED',
+                message: driveUnavailableMessage(req.user?.role ?? 'EMPLOYEE'),
+            });
+            return;
+        }
 
         res.status(500).json({
-            message: 'Internal server error',
+            message:
+                'Internal server error',
         });
+    } finally {
+        /*
+         * Multer solamente usa uploads/
+         * como almacenamiento temporal.
+         */
+        if (temporaryFilePath) {
+            try {
+                await fs.unlink(
+                    temporaryFilePath
+                );
+            } catch (cleanupError) {
+                console.error(
+                    'Temporary file cleanup error:',
+                    cleanupError
+                );
+            }
+        }
     }
 }
 
@@ -250,7 +1004,9 @@ export async function deleteExpenseController(
 
         const expense = await deleteExpense(
             req.user.companyId,
-            expenseId
+            expenseId,
+            req.user.userId,
+            req.user.role
         );
 
         if (!expense) {

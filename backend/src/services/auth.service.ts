@@ -55,15 +55,19 @@ export async function loginService(email: string, password: string) {
       FROM dbo.AppUser AS u
       INNER JOIN dbo.Role AS r
         ON r.Id = u.RoleId
+      INNER JOIN dbo.Company AS c
+        ON c.Id = u.CompanyId
       WHERE u.Email = ?
-        AND u.IsActive = 1;
+        AND u.IsActive = 1
+        AND r.IsActive = 1
+        AND c.IsActive = 1;
     `,
         [email]
     );
 
     const user = users[0];
 
-    if (!user) {
+    if (!user || users.length !== 1) {
         throw new Error('INVALID_CREDENTIALS');
     }
 

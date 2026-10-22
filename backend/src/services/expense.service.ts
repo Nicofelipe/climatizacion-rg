@@ -1,66 +1,109 @@
 import { executeQuery } from '../database/sqlServer';
 
 interface CreateExpenseInput {
+  companyId: number;
+  userId: number;
+  expenseTypeId: number;
+  supplierId?: number | null;
+  receiptNumber: string;
+  expenseDate: string;
+  totalAmount: number;
+  description?: string | null;
+}
+
+interface CreatedExpenseRow {
+  Id: number;
+  CompanyId: number;
+  UserId: number;
+  ExpenseTypeId: number;
+  SupplierId: number | null;
+  ReceiptNumber: string;
+  ExpenseDate: string;
+  NetAmount: number;
+  VatAmount: number;
+  TotalAmount: number;
+  Description: string | null;
+  Status: string;
+  CreatedAt: string;
+}
+
+interface ExpenseListRow {
+  DriveSyncPending: boolean;
+  ReviewedAt: string | null;
+  ReviewedByName: string | null;
+  RejectionReason: string | null;
+  Id: number;
+  UserId: number;
+  ReceiptNumber: string;
+  ExpenseDate: string;
+  ExpenseTypeId: number;
+  ExpenseTypeName: string;
+  SupplierId: number | null;
+  SupplierName: string | null;
+  NetAmount: number;
+  VatAmount: number;
+  TotalAmount: number;
+  Description: string | null;
+  Status: string;
+  CreatedAt: string;
+
+  FileId: number | null;
+  FileProvider: string | null;
+  FileProviderFileId: string | null;
+  FileOriginalName: string | null;
+  FileMimeType: string | null;
+  FileSize: number | null;
+}
+
+interface RollbackUpdatedExpenseInput {
     companyId: number;
-    userId: number;
+    expenseId: number;
     expenseTypeId: number;
     supplierId?: number | null;
     receiptNumber: string;
     expenseDate: string;
+    netAmount: number;
+    vatAmount: number;
     totalAmount: number;
     description?: string | null;
 }
 
-interface CreatedExpenseRow {
-    Id: number;
-    CompanyId: number;
-    UserId: number;
-    ExpenseTypeId: number;
-    SupplierId: number | null;
-    ReceiptNumber: string;
-    ExpenseDate: string;
-    NetAmount: number;
-    VatAmount: number;
-    TotalAmount: number;
-    Description: string | null;
-    Status: string;
-    CreatedAt: string;
-}
-
-interface ExpenseListRow {
-    Id: number;
-    ReceiptNumber: string;
-    ExpenseDate: string;
-    ExpenseTypeId: number;
-    ExpenseTypeName: string;
-    SupplierId: number | null;
-    SupplierName: string | null;
-    NetAmount: number;
-    VatAmount: number;
-    TotalAmount: number;
-    Description: string | null;
-    Status: string;
-    CreatedAt: string;
-
-    FileId: number | null;
-    FileProvider: string | null;
-    FileProviderFileId: string | null;
-    FileOriginalName: string | null;
-    FileMimeType: string | null;
-    FileSize: number | null;
-}
-
 export async function createExpense(input: CreateExpenseInput) {
+    const receiptNumber =
+        input.receiptNumber.trim().toUpperCase();
+
+    const existingExpenses =
+        await executeQuery<{ Id: number }>(
+            `
+            SELECT TOP 1 Id
+            FROM dbo.Expense
+            WHERE CompanyId = ?
+              AND ReceiptNumber = ?
+              AND Status <> N'REJECTED'
+              AND IsDeleted = 0;
+            `,
+            [
+                input.companyId,
+                receiptNumber,
+            ]
+        );
+
+    if (existingExpenses.length > 0) {
+        throw new Error(
+            'RECEIPT_NUMBER_ALREADY_EXISTS'
+        );
+    }
+
     const taxRate = 19;
 
-    const netAmount = Math.round(
-        input.totalAmount / (1 + taxRate / 100)
-    );
+  const netAmount = Math.round(
+    input.totalAmount / (1 + taxRate / 100)
+  );
 
-    const vatAmount = input.totalAmount - netAmount;
+  const vatAmount = input.totalAmount - netAmount;
 
-    const rows = await executeQuery<CreatedExpenseRow>(
-        `
+  const rows = await executeQuery<CreatedExpenseRow>(
+    `
       INSERT INTO dbo.Expense
       (
         CompanyId,
@@ -106,29 +149,36 @@ export async function createExpense(input: CreateExpenseInput) {
         ?
       );
     `,
-        [
-            input.companyId,
-            input.userId,
-            input.expenseTypeId,
-            input.supplierId ?? null,
-            input.receiptNumber,
-            input.expenseDate,
-            taxRate,
-            netAmount,
-            vatAmount,
-            input.totalAmount,
-            input.description ?? null,
-        ]
-    );
+    [
+      input.companyId,
+      input.userId,
+      input.expenseTypeId,
+      input.supplierId ?? null,
+      receiptNumber,
+      input.expenseDate,
+      taxRate,
+      netAmount,
+      vatAmount,
+      input.totalAmount,
+      input.description ?? null,
+    ]
+  );
 
-    return rows[0];
+  return rows[0];
 }
 
-export async function getExpenses(companyId: number) {
-    return executeQuery<ExpenseListRow>(
-        `
+export async function getExpenses(
+  companyId: number,
+  userId: number,
+  role: string
+) {
+  const isAdmin = role === 'ADMIN';
+
+  return executeQuery<ExpenseListRow>(
+    `
       SELECT
         e.Id,
+        e.UserId,
         e.ReceiptNumber,
         e.ExpenseDate,
         e.ExpenseTypeId,
@@ -148,20 +198,28 @@ export async function getExpenses(companyId: number) {
         ON s.Id = e.SupplierId
       WHERE e.CompanyId = ?
         AND e.IsDeleted = 0
+        AND (? = 1 OR e.UserId = ?)
       ORDER BY e.ExpenseDate DESC, e.Id DESC;
     `,
-        [companyId]
-    );
+    [
+      companyId,
+      isAdmin ? 1 : 0,
+      userId,
+    ]
+  );
 }
 
 export async function getExpenseById(
-    companyId: number,
-    expenseId: number
+  companyId: number,
+  expenseId: number,
+  userId: number,
+  role: string
 ) {
-    const rows = await executeQuery<ExpenseListRow>(
-        `
+  const rows = await executeQuery<ExpenseListRow>(
+    `
       SELECT
         e.Id,
+        e.UserId,
         e.ReceiptNumber,
         e.ExpenseDate,
         e.ExpenseTypeId,
@@ -174,6 +232,10 @@ export async function getExpenseById(
         e.Description,
         e.Status,
         e.CreatedAt,
+        e.ReviewedAt,
+        e.DriveSyncPending,
+        e.RejectionReason,
+        reviewer.FirstName + N' ' + reviewer.LastName AS ReviewedByName,
 
         f.Id AS FileId,
         f.Provider AS FileProvider,
@@ -194,50 +256,64 @@ export async function getExpenseById(
         ON f.EntityType = N'EXPENSE'
         AND f.EntityId = e.Id
         AND f.CompanyId = e.CompanyId
+      LEFT JOIN dbo.AppUser AS reviewer
+        ON reviewer.Id = e.ReviewedByUserId AND reviewer.CompanyId = e.CompanyId
 
       WHERE e.Id = ?
         AND e.CompanyId = ?
-        AND e.IsDeleted = 0;
-    `,
-        [expenseId, companyId]
-    );
+        AND e.IsDeleted = 0
+        AND (? = 1 OR e.UserId = ?);
+        `,
+      [
+        expenseId,
+        companyId,
+        role === 'ADMIN' ? 1 : 0,
+        userId,
+      ]
+  );
 
-    const row = rows[0];
+  const row = rows[0];
 
-    if (!row) {
-        return null;
-    }
+  if (!row) {
+    return null;
+  }
 
-    return {
-        Id: row.Id,
-        ReceiptNumber: row.ReceiptNumber,
-        ExpenseDate: row.ExpenseDate,
-        ExpenseTypeId: row.ExpenseTypeId,
-        ExpenseTypeName: row.ExpenseTypeName,
-        SupplierId: row.SupplierId,
-        SupplierName: row.SupplierName,
-        NetAmount: row.NetAmount,
-        VatAmount: row.VatAmount,
-        TotalAmount: row.TotalAmount,
-        Description: row.Description,
-        Status: row.Status,
-        CreatedAt: row.CreatedAt,
+  return {
+    Id: row.Id,
+    DriveSyncPending: row.DriveSyncPending,
+    ReviewedAt: row.ReviewedAt,
+    ReviewedByName: row.ReviewedByName,
+    RejectionReason: row.RejectionReason,
+    ReceiptNumber: row.ReceiptNumber,
+    ExpenseDate: row.ExpenseDate,
+    ExpenseTypeId: row.ExpenseTypeId,
+    ExpenseTypeName: row.ExpenseTypeName,
+    SupplierId: row.SupplierId,
+    SupplierName: row.SupplierName,
+    NetAmount: row.NetAmount,
+    VatAmount: row.VatAmount,
+    TotalAmount: row.TotalAmount,
+    Description: row.Description,
+    Status: row.Status,
+    CreatedAt: row.CreatedAt,
 
-        file: row.FileId
-            ? {
-                Id: row.FileId,
-                Provider: row.FileProvider,
-                ProviderFileId: row.FileProviderFileId,
-                OriginalFileName: row.FileOriginalName,
-                MimeType: row.FileMimeType,
-                FileSize: row.FileSize,
-            }
-            : null,
-    };
+    file: row.FileId
+      ? {
+        Id: row.FileId,
+        Provider: row.FileProvider,
+        ProviderFileId: row.FileProviderFileId,
+        OriginalFileName: row.FileOriginalName,
+        MimeType: row.FileMimeType,
+        FileSize: row.FileSize,
+      }
+      : null,
+  };
 }
 
 interface UpdateExpenseInput {
     companyId: number;
+    userId: number;
+    role: string;
     expenseId: number;
     expenseTypeId: number;
     supplierId?: number | null;
@@ -247,69 +323,131 @@ interface UpdateExpenseInput {
     description?: string | null;
 }
 
-export async function updateExpense(input: UpdateExpenseInput) {
+export async function updateExpense(
+    input: UpdateExpenseInput
+) {
+    const receiptNumber =
+        input.receiptNumber.trim().toUpperCase();
+
+    /*
+     * Comprobamos que el nuevo número de boleta
+     * no pertenezca a otro registro activo
+     * de la misma empresa.
+     */
+    const duplicateRows =
+        await executeQuery<{ Id: number }>(
+            `
+            SELECT TOP 1 Id
+            FROM dbo.Expense
+            WHERE CompanyId = ?
+              AND ReceiptNumber = ?
+              AND Id <> ?
+              AND Status <> N'REJECTED'
+              AND IsDeleted = 0;
+            `,
+            [
+                input.companyId,
+                receiptNumber,
+                input.expenseId,
+            ]
+        );
+
+    if (duplicateRows.length > 0) {
+        throw new Error(
+            'RECEIPT_NUMBER_ALREADY_EXISTS'
+        );
+    }
+
     const taxRate = 19;
 
     const netAmount = Math.round(
-        input.totalAmount / (1 + taxRate / 100)
+        input.totalAmount /
+            (1 + taxRate / 100)
     );
 
-    const vatAmount = input.totalAmount - netAmount;
+    const vatAmount =
+        input.totalAmount - netAmount;
 
-    const rows = await executeQuery<ExpenseListRow>(
-        `
-      UPDATE dbo.Expense
-      SET
-        ExpenseTypeId = ?,
-        SupplierId = ?,
-        ReceiptNumber = ?,
-        ExpenseDate = ?,
-        TaxRate = ?,
-        NetAmount = ?,
-        VatAmount = ?,
-        TotalAmount = ?,
-        Description = ?,
-        UpdatedAt = SYSDATETIME()
-      OUTPUT
-        INSERTED.Id,
-        INSERTED.ReceiptNumber,
-        INSERTED.ExpenseDate,
-        INSERTED.ExpenseTypeId,
-        INSERTED.SupplierId,
-        INSERTED.NetAmount,
-        INSERTED.VatAmount,
-        INSERTED.TotalAmount,
-        INSERTED.Description,
-        INSERTED.Status,
-        INSERTED.CreatedAt
-      WHERE Id = ?
-        AND CompanyId = ?
-        AND IsDeleted = 0;
-    `,
-        [
-            input.expenseTypeId,
-            input.supplierId ?? null,
-            input.receiptNumber,
-            input.expenseDate,
-            taxRate,
-            netAmount,
-            vatAmount,
-            input.totalAmount,
-            input.description ?? null,
-            input.expenseId,
-            input.companyId,
-        ]
-    );
+    const isAdmin =
+        input.role === 'ADMIN';
+
+    const rows =
+        await executeQuery<ExpenseListRow>(
+            `
+            SET NOCOUNT ON; SET XACT_ABORT ON;
+            BEGIN TRY
+            BEGIN TRANSACTION;
+            DECLARE @Before nvarchar(max), @After nvarchar(max), @ChangedId int;
+            SELECT @Before=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status,ExpenseTypeId,SupplierId,ReceiptNumber,Description
+              FROM dbo.Expense WITH (UPDLOCK,HOLDLOCK) WHERE Id=? AND CompanyId=? FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+            UPDATE dbo.Expense
+            SET
+                ExpenseTypeId = ?,
+                SupplierId = ?,
+                ReceiptNumber = ?,
+                ExpenseDate = ?,
+                TaxRate = ?,
+                NetAmount = ?,
+                VatAmount = ?,
+                TotalAmount = ?,
+                Description = ?,
+                UpdatedAt = SYSDATETIME()
+            WHERE Id = ?
+              AND CompanyId = ?
+              AND IsDeleted = 0
+              AND Status = N'PENDING'
+              AND DriveSyncPending = 0
+              AND (
+                    ? = 1
+                    OR UserId = ?
+                  );
+            IF @@ROWCOUNT>0 BEGIN
+              SET @ChangedId=?;
+              SELECT @After=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status,ExpenseTypeId,SupplierId,ReceiptNumber,Description
+                FROM dbo.Expense WHERE Id=@ChangedId FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+              INSERT INTO dbo.AuditLog(CompanyId,UserId,Action,Entity,EntityId,BeforeData,AfterData,CreatedAt)
+                VALUES(?,?,N'UPDATE_EXPENSE',N'EXPENSE',@ChangedId,@Before,@After,SYSUTCDATETIME());
+            END;
+            COMMIT TRANSACTION;
+            SELECT * FROM dbo.Expense WHERE Id=@ChangedId;
+            END TRY
+            BEGIN CATCH
+              IF @@TRANCOUNT>0 ROLLBACK TRANSACTION;
+              THROW;
+            END CATCH;
+            `,
+            [
+                input.expenseId,input.companyId,
+                input.expenseTypeId,
+                input.supplierId ?? null,
+                receiptNumber,
+                input.expenseDate,
+                taxRate,
+                netAmount,
+                vatAmount,
+                input.totalAmount,
+                input.description ?? null,
+
+                input.expenseId,
+                input.companyId,
+
+                isAdmin ? 1 : 0,
+                input.userId,
+                input.expenseId,input.companyId,input.userId,
+            ]
+        );
 
     return rows[0] ?? null;
 }
 
 export async function deleteExpense(
-    companyId: number,
-    expenseId: number
+  companyId: number,
+  expenseId: number,
+  userId: number,
+  role: string
 ) {
-    const rows = await executeQuery<{ Id: number }>(
-        `
+  const rows = await executeQuery<{ Id: number }>(
+    `
       UPDATE dbo.Expense
       SET
         IsDeleted = 1,
@@ -318,10 +456,85 @@ export async function deleteExpense(
         INSERTED.Id
       WHERE Id = ?
         AND CompanyId = ?
-        AND IsDeleted = 0;
+        AND IsDeleted = 0
+        AND Status = N'PENDING'
+        AND DriveSyncPending = 0
+        AND (? = 1 OR UserId = ?);
     `,
-        [expenseId, companyId]
-    );
+    [expenseId, companyId, role === 'ADMIN' ? 1 : 0, userId]
+  );
 
-    return rows[0] ?? null;
+  return rows[0] ?? null;
+}
+
+
+export async function rollbackCreatedExpense(
+    companyId: number,
+    expenseId: number
+) {
+    await executeQuery(
+        `
+        DELETE FROM dbo.Expense
+        WHERE Id = ?
+          AND CompanyId = ?;
+        `,
+        [
+            expenseId,
+            companyId,
+        ]
+    );
+}
+
+export async function rollbackUpdatedExpense(
+    input: RollbackUpdatedExpenseInput
+) {
+    await executeQuery(
+        `
+        SET NOCOUNT ON; SET XACT_ABORT ON;
+        BEGIN TRY
+        BEGIN TRANSACTION;
+        DECLARE @Before nvarchar(max), @After nvarchar(max);
+        SELECT @Before=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status,ExpenseTypeId,SupplierId,ReceiptNumber,Description
+          FROM dbo.Expense WITH(UPDLOCK,HOLDLOCK) WHERE Id=? AND CompanyId=? FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+        UPDATE dbo.Expense
+        SET
+            ExpenseTypeId = ?,
+            SupplierId = ?,
+            ReceiptNumber = ?,
+            ExpenseDate = ?,
+            NetAmount = ?,
+            VatAmount = ?,
+            TotalAmount = ?,
+            Description = ?,
+            UpdatedAt = SYSDATETIME()
+        WHERE Id = ?
+          AND CompanyId = ?
+          AND IsDeleted = 0;
+        SELECT @After=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status,ExpenseTypeId,SupplierId,ReceiptNumber,Description
+          FROM dbo.Expense WHERE Id=? AND CompanyId=? FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+        INSERT INTO dbo.AuditLog(CompanyId,UserId,Action,Entity,EntityId,BeforeData,AfterData,Reason,CreatedAt)
+          SELECT ?,UserId,N'ROLLBACK_EXPENSE',N'EXPENSE',?,@Before,@After,N'Edición revertida por un error al actualizar el respaldo.',SYSUTCDATETIME()
+          FROM (SELECT TOP 1 UserId FROM dbo.AuditLog WHERE CompanyId=? AND Entity=N'EXPENSE' AND EntityId=? AND Action=N'UPDATE_EXPENSE' ORDER BY Id DESC) AS actor;
+        COMMIT TRANSACTION;
+        END TRY
+        BEGIN CATCH
+          IF @@TRANCOUNT>0 ROLLBACK TRANSACTION;
+          THROW;
+        END CATCH;
+        `,
+        [
+            input.expenseId,input.companyId,
+            input.expenseTypeId,
+            input.supplierId ?? null,
+            input.receiptNumber,
+            input.expenseDate,
+            input.netAmount,
+            input.vatAmount,
+            input.totalAmount,
+            input.description ?? null,
+            input.expenseId,
+            input.companyId,
+            input.expenseId,input.companyId,input.companyId,input.expenseId,input.companyId,input.expenseId,
+        ]
+    );
 }

@@ -1,11 +1,48 @@
 import { Response } from 'express';
 
+import jwt from 'jsonwebtoken';
+import { googleOAuthClient } from '../config/googleOAuth';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
+import { validateGoogleDriveFolder } from '../services/googleDrive.service';
 import {
     getCompanyStorage,
-    upsertGoogleDriveStorage,
 } from '../services/storage.service';
-import { extractGoogleDriveFolderId } from '../utils/googleDrive';
+import { upsertStorageCredential } from '../services/storageCredential.service';
+import { safeErrorMessage } from '../utils/storageError';
+
+export async function testGoogleDriveController(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const folder = await validateGoogleDriveFolder(
+      req.user.companyId
+    );
+
+    res.status(200).json({
+      connected: true,
+      folder,
+    });
+  } catch (error) {
+    console.error(
+      'Google Drive test error:',
+      safeErrorMessage(error)
+    );
+
+    res.status(400).json({
+      connected: false,
+      message:
+        'No se pudo verificar Drive. Si la autorización venció, vuelve a conectar la cuenta con acceso a la carpeta.',
+    });
+  }
+}
 
 export async function getStorageController(
     req: AuthenticatedRequest,
@@ -47,33 +84,9 @@ export async function updateGoogleDriveStorageController(
             return;
         }
 
-        const { folderUrl } = req.body;
-
-        if (!folderUrl || typeof folderUrl !== 'string') {
-            res.status(400).json({
-                message: 'Google Drive folder URL is required',
-            });
-            return;
-        }
-
-        const rootFolderId =
-            extractGoogleDriveFolderId(folderUrl);
-
-        if (!rootFolderId) {
-            res.status(400).json({
-                message: 'Invalid Google Drive folder URL',
-            });
-            return;
-        }
-
-        const storage = await upsertGoogleDriveStorage(
-            req.user.companyId,
-            rootFolderId
-        );
-
-        res.status(200).json({
-            message: 'Google Drive storage configured successfully',
-            storage,
+        res.status(403).json({
+            code: 'STORAGE_FOLDER_LOCKED',
+            message: 'La carpeta de respaldo es fija y no se puede cambiar desde la aplicación. Contacta al responsable técnico.',
         });
     } catch (error) {
         console.error('Update storage error:', error);
@@ -82,4 +95,158 @@ export async function updateGoogleDriveStorageController(
             message: 'Internal server error',
         });
     }
+}
+
+export async function connectGoogleDriveController(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        message: 'Authentication required',
+      });
+      return;
+    }
+
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    const storage = await getCompanyStorage(req.user.companyId);
+    if (!storage?.RootFolderId) {
+      res.status(409).json({ message: 'La carpeta de respaldo debe ser configurada por el responsable técnico antes de renovar el acceso.' });
+      return;
+    }
+
+    const state = jwt.sign(
+      {
+        companyId: req.user.companyId,
+        userId: req.user.userId,
+        purpose: 'GOOGLE_DRIVE_OAUTH',
+      },
+      jwtSecret,
+      {
+        expiresIn: '10m',
+      }
+    );
+
+    const authorizationUrl =
+      googleOAuthClient.generateAuthUrl({
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: [
+          'https://www.googleapis.com/auth/drive.file',
+        ],
+        state,
+      });
+
+    res.status(200).json({
+      authorizationUrl,
+    });
+  } catch (error) {
+    console.error(
+      'Google Drive connection error:',
+      error
+    );
+
+    res.status(500).json({
+      message: 'Internal server error',
+    });
+  }
+}
+
+
+interface GoogleDriveOAuthState {
+  companyId: number;
+  userId: number;
+  purpose: string;
+}
+
+export async function googleDriveCallbackController(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const {
+      code,
+      state,
+    } = req.query;
+
+    if (
+      typeof code !== 'string' ||
+      typeof state !== 'string'
+    ) {
+      res.status(400).json({
+        message: 'Missing OAuth code or state',
+      });
+      return;
+    }
+
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    const decoded = jwt.verify(
+      state,
+      jwtSecret
+    ) as GoogleDriveOAuthState;
+
+    if (decoded.purpose !== 'GOOGLE_DRIVE_OAUTH' ||
+        !Number.isInteger(decoded.companyId) || decoded.companyId <= 0 ||
+        !Number.isInteger(decoded.userId) || decoded.userId <= 0) {
+      res.status(400).json({
+        message: 'Invalid OAuth state',
+      });
+      return;
+    }
+
+    // Reconnection can renew credentials only; folder IDs from the request are ignored.
+    const existingStorage = await getCompanyStorage(decoded.companyId);
+    if (!existingStorage?.RootFolderId) {
+      res.status(400).json({
+        message: 'La carpeta de respaldo no está configurada. Contacta al responsable técnico.',
+      });
+      return;
+    }
+
+    /*
+     * Intercambiamos el authorization code por los
+     * tokens OAuth de Google.
+     */
+    const { tokens } =
+      await googleOAuthClient.getToken(code);
+
+    if (!tokens.refresh_token) {
+      res.status(400).json({
+        message:
+          'Google did not return a refresh token',
+      });
+      return;
+    }
+
+    /*
+     * Guardamos el refresh token cifrado.
+     */
+    await upsertStorageCredential(
+      existingStorage.Id,
+      tokens.refresh_token
+    );
+
+    res.status(200).type('html').send('<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Drive conectado</title><body style="font-family:system-ui;padding:40px;max-width:560px;margin:auto"><h1>Google Drive conectado</h1><p>La autorización se actualizó correctamente. Puedes cerrar esta pestaña y volver al formulario de la boleta para guardarla.</p></body></html>');
+  } catch (error) {
+    console.error(
+      'Google Drive OAuth callback error:',
+      safeErrorMessage(error)
+    );
+
+    res.status(400).json({
+      message:
+        'Google Drive authorization failed',
+    });
+  }
 }

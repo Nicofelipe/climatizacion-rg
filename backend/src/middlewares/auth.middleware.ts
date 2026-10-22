@@ -39,6 +39,13 @@ export function authenticateToken(
       secret
     ) as AuthTokenPayload;
 
+    if (!payload || !Number.isInteger(payload.userId) || payload.userId <= 0 ||
+        !Number.isInteger(payload.companyId) || payload.companyId <= 0 ||
+        !['ADMIN', 'EMPLOYEE'].includes(payload.role)) {
+      res.status(401).json({ message: 'Invalid session token' });
+      return;
+    }
+
     req.user = payload;
 
     next();

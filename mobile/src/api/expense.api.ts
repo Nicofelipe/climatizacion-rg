@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { requestJson } from './http';
 
 export interface Expense {
     Id: number;
@@ -16,6 +17,31 @@ export interface Expense {
     CreatedAt: string;
 }
 
+export interface ExpenseDetail extends Expense {
+    DriveSyncPending?: boolean;
+  ReviewedAt: string | null;
+  ReviewedByName: string | null;
+  RejectionReason: string | null;
+  file: { Id: number; OriginalFileName: string; MimeType: string | null; FileSize: number | null } | null;
+}
+
+export async function reviewExpensesApi(token: string, expenseIds: number[], decision: 'APPROVED' | 'REJECTED', reason?: string) {
+  return requestJson(`${API_URL}/expenses/review`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expenseIds, decision, reason }),
+  });
+}
+
+export async function getExpenseApi(token: string, id: number): Promise<ExpenseDetail> {
+  const result = await requestJson(`${API_URL}/expenses/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+  return result.expense;
+}
+
+export async function getExpenseImageApi(token: string, id: number): Promise<string> {
+  const result = await requestJson(`${API_URL}/expenses/${id}/image`, { headers: { Authorization: `Bearer ${token}` } }, 90000);
+  return result.dataUri;
+}
+
 interface ExpenseListResponse {
     expenses: Expense[];
 }
@@ -25,19 +51,13 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 export async function getExpensesApi(
     token: string
 ): Promise<Expense[]> {
-    const response = await fetch(`${API_URL}/expenses`, {
+    const result: ExpenseListResponse = await requestJson(`${API_URL}/expenses`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
     });
-
-    const result: ExpenseListResponse = await response.json();
-
-    if (!response.ok) {
-        throw new Error('No fue posible obtener las boletas');
-    }
 
     return result.expenses;
 }
@@ -59,7 +79,8 @@ interface CreateExpenseResponse {
 
 export async function createExpenseApi(
     token: string,
-    data: CreateExpenseRequest
+    data: CreateExpenseRequest,
+    expenseId?: number
 ): Promise<Expense> {
     const formData = new FormData();
 
@@ -77,8 +98,6 @@ export async function createExpenseApi(
     }
 
     if (data.imageUri) {
-        console.log('Sending imageUri:', data.imageUri);
-        console.log('Platform:', Platform.OS);
 
         const fileName =
             data.imageUri.split('/').pop() ??
@@ -86,12 +105,11 @@ export async function createExpenseApi(
 
         if (Platform.OS === 'web') {
             const imageResponse = await fetch(data.imageUri);
+            if (!imageResponse.ok) throw new Error('No fue posible leer la imagen. Selecciónala de nuevo.');
             const blob = await imageResponse.blob();
 
-            console.log('Image response ok:', imageResponse.ok);
-            console.log('Image response type:', imageResponse.type);
-            console.log('Blob type:', blob.type);
-            console.log('Blob size:', blob.size);
+            if (!blob.size) throw new Error('La imagen está vacía. Selecciona otra foto.');
+            if (blob.size > 10 * 1024 * 1024) throw new Error('La imagen supera los 10 MB. Selecciona una foto más pequeña.');
 
             const extension =
                 blob.type === 'image/png'
@@ -132,21 +150,13 @@ export async function createExpenseApi(
         }
     }
 
-    const response = await fetch(`${API_URL}/expenses`, {
-        method: 'POST',
+    const result: CreateExpenseResponse = await requestJson(`${API_URL}/expenses${expenseId ? `/${expenseId}` : ''}`, {
+        method: expenseId ? 'PUT' : 'POST',
         headers: {
             Authorization: `Bearer ${token}`,
         },
         body: formData,
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-        throw new Error(
-            result.message ?? 'No fue posible registrar la boleta'
-        );
-    }
+    }, 90000);
 
     return result.expense;
 }

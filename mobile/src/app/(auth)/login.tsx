@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-import { router } from 'expo-router';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Redirect, router } from 'expo-router';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -9,15 +9,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing, Typography } from '@/theme';
 
 export default function LoginScreen() {
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, isAuthenticated } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  if (isAuthenticated) return <Redirect href="/(protected)/(tabs)" />;
 
   async function handleLogin() {
+    if (isLoading) return;
+    setError(null);
     try {
       await login({
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         password,
       });
 
@@ -28,22 +33,25 @@ export default function LoginScreen() {
           ? error.message
           : 'No fue posible iniciar sesión';
 
-      Alert.alert('Error', message);
+      setError(message);
     }
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
+        <Text style={styles.eyebrow}>GESTIÓN DE BOLETAS</Text>
         <Text style={styles.title}>
           Climatización RG
         </Text>
 
         <Text style={styles.subtitle}>
-          Inicia sesión para continuar
+          Tus gastos y respaldos, en un solo lugar.
         </Text>
 
         <View style={styles.form}>
+          <Text style={styles.formTitle}>Bienvenido</Text>
+          <Text style={styles.help}>Ingresa con la cuenta que registró el administrador de tu empresa.</Text>
           <Input
             label="Correo electrónico"
             value={email}
@@ -66,18 +74,21 @@ export default function LoginScreen() {
             loading={isLoading}
             disabled={!email.trim() || !password}
           />
+          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <Text style={styles.help}>¿No tienes acceso? Solicita al encargado que registre tu correo y te entregue tu contraseña por un canal privado.</Text>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: Colors.background,
     justifyContent: 'center',
     paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.xl,
   },
 
   content: {
@@ -103,5 +114,14 @@ const styles = StyleSheet.create({
 
   form: {
     width: '100%',
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
+  eyebrow: { textAlign: 'center', color: Colors.primary, fontWeight: '700', letterSpacing: 2, marginBottom: Spacing.md },
+  formTitle: { fontSize: 24, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
+  help: { color: Colors.textSecondary, lineHeight: 22, marginVertical: Spacing.md },
+  error: { color: Colors.danger, marginTop: Spacing.md },
 });

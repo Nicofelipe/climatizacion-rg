@@ -4,12 +4,13 @@ import Input from '@/components/ui/Input';
 import { expenseTypes } from '@/constants/expenseTypes';
 import { useAuth } from '@/hooks/useAuth';
 import { createExpense } from '@/services/ExpenseService';
+import { createExpenseApi, getExpenseApi, getExpenseImageApi } from '@/api/expense.api';
 import { Colors, Spacing, Typography } from '@/theme';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
-    Alert,
+    ActivityIndicator,
     Image,
     Modal,
     Pressable,
@@ -20,6 +21,8 @@ import {
 
 export default function CreateExpenseScreen() {
     const { token } = useAuth();
+    const { editId } = useLocalSearchParams<{ editId?: string }>();
+    const isEditing = Boolean(editId);
 
     const [receiptNumber, setReceiptNumber] = useState('');
     const [expenseDate, setExpenseDate] = useState('');
@@ -28,16 +31,76 @@ export default function CreateExpenseScreen() {
     const [description, setDescription] = useState('');
     const [imageUri, setImageUri] = useState<string | null>(null);
     const [showImageOptions, setShowImageOptions] = useState(false);
+    const [imageError, setImageError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [loadingExisting, setLoadingExisting] = useState(Boolean(editId));
+    const [hasExistingImage, setHasExistingImage] = useState(false);
+    const [existingImageUri, setExistingImageUri] = useState<string | null>(null);
+    const [removeExistingImage, setRemoveExistingImage] = useState(false);
+    const [loadingImage, setLoadingImage] = useState(false);
+    const [existingImageError, setExistingImageError] = useState<string | null>(null);
+    const [imageAttempt, setImageAttempt] = useState(0);
+    const [supplierId, setSupplierId] = useState<number | null>(null);
+    const [editBlocked, setEditBlocked] = useState(false);
+
+    useEffect(() => {
+        if (!editId || !token) return;
+        let active = true;
+        setLoadingExisting(true);
+        setEditBlocked(true);
+        getExpenseApi(token, Number(editId)).then(expense => {
+            if (!active) return;
+            if (expense.Status !== 'PENDING') {
+                setSubmitError('Esta boleta ya no está pendiente y no se puede modificar.');
+                return;
+            }
+            setReceiptNumber(expense.ReceiptNumber);
+            setExpenseDate(expense.ExpenseDate.slice(0, 10));
+            setExpenseTypeId(expense.ExpenseTypeId);
+            setTotalAmount(String(expense.TotalAmount));
+            setDescription(expense.Description ?? '');
+            setSupplierId(expense.SupplierId);
+            setHasExistingImage(Boolean(expense.file));
+            setEditBlocked(false);
+        }).catch(err => {
+            if (active) setSubmitError(err instanceof Error ? err.message : 'No fue posible cargar la boleta.');
+        }).finally(() => { if (active) setLoadingExisting(false); });
+        return () => { active = false; };
+    }, [editId, token]);
+
+    useEffect(() => {
+        if (!editId || !token || !hasExistingImage) return;
+        let active = true;
+        setLoadingImage(true);
+        setExistingImageError(null);
+        getExpenseImageApi(token, Number(editId)).then(uri => {
+            if (active) setExistingImageUri(uri);
+        }).catch(err => {
+            if (active) setExistingImageError(err instanceof Error ? err.message : 'No fue posible cargar la imagen guardada.');
+        }).finally(() => { if (active) setLoadingImage(false); });
+        return () => { active = false; };
+    }, [editId, token, hasExistingImage, imageAttempt]);
+
+    const previewUri = imageUri ?? (removeExistingImage ? null : existingImageUri);
+
+    function removeSelectedImage() {
+        if (imageUri) {
+            setImageUri(null);
+        } else if (hasExistingImage) {
+            setRemoveExistingImage(true);
+        }
+        setImageError(null);
+    }
 
     async function handlePickImage() {
+        if (isSaving || saved || editBlocked) return;
         const permission =
             await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (!permission.granted) {
-            Alert.alert(
-                'Permiso requerido',
-                'Necesitamos acceso a tus fotos para seleccionar la imagen de la boleta.'
-            );
+            setImageError('Necesitamos acceso a tus fotos para seleccionar la imagen de la boleta.');
             return;
         }
 
@@ -48,20 +111,18 @@ export default function CreateExpenseScreen() {
         });
 
         if (!result.canceled) {
-            console.log('Selected image asset:', result.assets[0]);
             setImageUri(result.assets[0].uri);
+            setImageError(null);
         }
     }
 
     async function handleTakePhoto() {
+        if (isSaving || saved || editBlocked) return;
         const permission =
             await ImagePicker.requestCameraPermissionsAsync();
 
         if (!permission.granted) {
-            Alert.alert(
-                'Permiso requerido',
-                'Necesitamos acceso a la cámara para fotografiar la boleta.'
-            );
+            setImageError('Necesitamos acceso a la cámara para fotografiar la boleta.');
             return;
         }
 
@@ -73,16 +134,25 @@ export default function CreateExpenseScreen() {
 
         if (!result.canceled) {
             setImageUri(result.assets[0].uri);
+            setImageError(null);
         }
     }
 
     function handleImageOptions() {
+        if (isSaving || saved || loadingExisting || editBlocked) return;
         setShowImageOptions(true);
     }
 
     async function handleSubmit() {
+        if (isSaving || saved || loadingExisting || editBlocked) return;
+        setSubmitError(null);
         if (!token) {
-            Alert.alert('Error', 'Sesión no válida');
+            setSubmitError('Tu sesión no es válida. Vuelve a iniciar sesión.');
+            return;
+        }
+
+        if (!imageUri && (!hasExistingImage || removeExistingImage)) {
+            setImageError('Agrega una foto de la boleta para poder guardarla.');
             return;
         }
 
@@ -97,37 +167,34 @@ export default function CreateExpenseScreen() {
             !Number.isFinite(parsedTotalAmount) ||
             parsedTotalAmount <= 0
         ) {
-            Alert.alert(
-                'Datos incompletos',
-                'Completa correctamente los campos obligatorios. La fecha debe usar el formato AAAA-MM-DD.'
-            );
+            setSubmitError('Completa número, fecha, tipo de gasto y monto. La fecha debe usar el formato AAAA-MM-DD y el monto debe ser mayor que cero.');
             return;
         }
 
+        setIsSaving(true);
         try {
-            await createExpense(token, {
+            const data = {
                 expenseTypeId,
-                supplierId: null,
+                supplierId,
                 receiptNumber: receiptNumber.trim(),
                 expenseDate: expenseDate.trim(),
                 totalAmount: parsedTotalAmount,
                 description: description.trim() || null,
                 imageUri,
-            });
+            };
+            if (editId) await createExpenseApi(token, data, Number(editId));
+            else await createExpense(token, data);
 
-            Alert.alert(
-                'Boleta registrada',
-                'La boleta fue guardada correctamente.'
-            );
-
-            router.replace('/(protected)/(tabs)/expenses');
+            setSaved(true);
         } catch (error) {
             const message =
                 error instanceof Error
                     ? error.message
                     : 'No fue posible registrar la boleta';
 
-            Alert.alert('Error', message);
+            setSubmitError(message);
+        } finally {
+            setIsSaving(false);
         }
     }
 
@@ -141,7 +208,7 @@ export default function CreateExpenseScreen() {
                     marginBottom: Spacing.lg,
                 }}
             >
-                Registrar boleta
+                {isEditing ? 'Editar boleta pendiente' : 'Registrar boleta'}
             </Text>
 
             <ScrollView
@@ -157,8 +224,14 @@ export default function CreateExpenseScreen() {
                         marginBottom: Spacing.sm,
                     }}
                 >
-                    Imagen de la boleta
+                    {imageUri ? 'Nueva imagen seleccionada' : hasExistingImage && !removeExistingImage ? 'Imagen guardada de la boleta' : 'Imagen de la boleta (obligatoria)'}
                 </Text>
+
+                {imageError ? (
+                    <Text accessibilityRole="alert" style={{ color: Colors.text, marginBottom: Spacing.sm }}>
+                        {imageError}
+                    </Text>
+                ) : null}
 
                 <Pressable
                     onPress={handleImageOptions}
@@ -169,16 +242,17 @@ export default function CreateExpenseScreen() {
                         marginBottom: Spacing.lg,
                     }}
                 >
-                    {imageUri ? (
+                    {previewUri ? (
                         <>
                             <Image
-                                source={{ uri: imageUri }}
+                                source={{ uri: previewUri }}
                                 style={{
                                     width: 180,
                                     height: 180,
                                     borderRadius: 12,
                                 }}
                                 resizeMode="contain"
+                                onError={() => setImageError('No fue posible mostrar la imagen. Puedes elegir otra foto.')}
                             />
 
                             <Text
@@ -215,12 +289,25 @@ export default function CreateExpenseScreen() {
                                     fontSize: Typography.body,
                                 }}
                             >
-                                Agregar imagen
+                                {loadingImage && !removeExistingImage ? 'Cargando imagen guardada…' : hasExistingImage && !removeExistingImage ? 'Seleccionar otra foto (opcional)' : 'Agregar imagen'}
                             </Text>
                         </>
                     )}
                 </Pressable>
-
+                {loadingImage && !imageUri && !removeExistingImage ? <ActivityIndicator style={{ marginBottom: Spacing.md }} /> : null}
+                {existingImageError && !imageUri && !removeExistingImage ? <View style={{ gap: Spacing.sm, marginBottom: Spacing.md }}>
+                    <Text accessibilityRole="alert" style={{ color: Colors.danger }}>{existingImageError}</Text>
+                    <Button title="Reintentar imagen guardada" onPress={() => setImageAttempt(value => value + 1)} disabled={isSaving || saved} />
+                </View> : null}
+                {previewUri ? <View style={{ marginBottom: Spacing.md }}>
+                    <Button title={imageUri ? 'Quitar foto seleccionada' : 'Quitar imagen para reemplazarla'} onPress={removeSelectedImage} disabled={isSaving || saved} />
+                </View> : null}
+                {hasExistingImage && (removeExistingImage || imageUri) ? <View style={{ gap: Spacing.sm, marginBottom: Spacing.md }}>
+                    <Text style={{ color: Colors.textSecondary }}>La imagen guardada se conserva hasta que guardes una foto de reemplazo. La boleta debe tener siempre una imagen.</Text>
+                    <Button title="Cancelar reemplazo y conservar imagen original" onPress={() => {
+                        setImageUri(null); setRemoveExistingImage(false); setImageError(null);
+                    }} disabled={isSaving || saved} />
+                </View> : null}
 
                 <Input
                     label="Número de boleta"
@@ -280,10 +367,22 @@ export default function CreateExpenseScreen() {
                     placeholder="Opcional"
                 />
 
-                <Button
-                    title="Guardar boleta"
+                {submitError ? (
+                    <View accessibilityRole="alert" style={{ backgroundColor: '#FEF2F2', borderColor: Colors.danger, borderWidth: 1, borderRadius: 12, padding: Spacing.md, marginBottom: Spacing.md }}>
+                        <Text style={{ color: '#991B1B' }}>{submitError}</Text>
+                    </View>
+                ) : null}
+                {saved ? (
+                    <View style={{ gap: Spacing.md }}>
+                        <Text accessibilityRole="alert" style={{ color: Colors.success }}>{isEditing ? 'Cambios guardados correctamente.' : 'Boleta guardada correctamente con su respaldo en Drive.'}</Text>
+                        <Button title={isEditing ? 'Volver al detalle' : 'Ver mis boletas'} onPress={() => editId ? router.replace({ pathname: '/(protected)/expenses/[id]', params: { id: editId } }) : router.replace('/(protected)/(tabs)/expenses')} />
+                    </View>
+                ) : <Button
+                    title={loadingExisting ? 'Cargando boleta…' : isSaving ? 'Guardando boleta…' : isEditing ? 'Guardar cambios' : 'Guardar boleta'}
                     onPress={handleSubmit}
-                />
+                    loading={isSaving}
+                    disabled={isSaving || loadingExisting || editBlocked}
+                />}
             </ScrollView>
             <Modal
                 visible={showImageOptions}

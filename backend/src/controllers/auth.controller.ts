@@ -6,14 +6,16 @@ export async function loginController(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || !email.trim() ||
+        typeof password !== 'string' || !password ||
+        email.length > 254 || Buffer.byteLength(password, 'utf8') > 72) {
       res.status(400).json({
         message: 'Email and password are required',
       });
       return;
     }
 
-    const result = await loginService(email, password);
+    const result = await loginService(email.trim().toLowerCase(), password);
 
     res.status(200).json({
       message: 'Login successful',

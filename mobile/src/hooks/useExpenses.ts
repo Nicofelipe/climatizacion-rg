@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 import type { Expense } from '@/api/expense.api';
 import { getExpenses } from '@/services/ExpenseService';
@@ -33,9 +34,9 @@ export function useExpenses(token: string | null) {
     }
   }, [token]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     loadExpenses();
-  }, [loadExpenses]);
+  }, [loadExpenses]));
 
   return {
     expenses,

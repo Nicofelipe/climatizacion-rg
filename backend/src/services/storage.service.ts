@@ -1,13 +1,13 @@
 import { executeQuery } from '../database/sqlServer';
 
 interface CompanyStorageRow {
-    Id: number;
-    CompanyId: number;
-    Provider: string;
-    RootFolderId: string;
-    IsActive: boolean;
-    CreatedAt: string;
-    UpdatedAt: string | null;
+  Id: number;
+  CompanyId: number;
+  Provider: string;
+  RootFolderId: string | null;
+  IsActive: boolean;
+  CreatedAt: string;
+  UpdatedAt: string | null;
 }
 
 export async function getCompanyStorage(companyId: number) {
@@ -30,6 +30,47 @@ export async function getCompanyStorage(companyId: number) {
     );
 
     return rows[0] ?? null;
+}
+
+export async function ensureGoogleDriveStorage(
+  companyId: number
+) {
+  const existingStorage =
+    await getCompanyStorage(companyId);
+
+  if (existingStorage) {
+    return existingStorage;
+  }
+
+  const rows = await executeQuery<CompanyStorageRow>(
+    `
+      INSERT INTO dbo.CompanyStorage
+      (
+        CompanyId,
+        Provider,
+        RootFolderId,
+        IsActive
+      )
+      OUTPUT
+        INSERTED.Id,
+        INSERTED.CompanyId,
+        INSERTED.Provider,
+        INSERTED.RootFolderId,
+        INSERTED.IsActive,
+        INSERTED.CreatedAt,
+        INSERTED.UpdatedAt
+      VALUES
+      (
+        ?,
+        N'GOOGLE_DRIVE',
+        NULL,
+        1
+      );
+    `,
+    [companyId]
+  );
+
+  return rows[0];
 }
 
 export async function upsertGoogleDriveStorage(

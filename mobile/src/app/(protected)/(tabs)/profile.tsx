@@ -1,9 +1,5 @@
-import { Text, View } from 'react-native';
+import ProfileOverview from '@/components/common/ProfileOverview';
 
 export default function Profile() {
-  return (
-    <View>
-      <Text>Perfil</Text>
-    </View>
-  );
+  return <ProfileOverview />;
 }
