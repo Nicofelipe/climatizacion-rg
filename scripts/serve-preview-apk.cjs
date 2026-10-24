@@ -19,6 +19,7 @@ const downloads = new Map([
   ['/clepit-pruebas-ocr-0.1.4.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.4.apk')],
   ['/clepit-pruebas-ocr-0.1.5.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.5.apk')],
   ['/clepit-1.1.0.apk', path.resolve(__dirname, '../artifacts/clepit-1.1.0.apk')],
+  ['/clepit-1.1.1.apk', path.resolve(__dirname, '../artifacts/clepit-1.1.1.apk')],
   ['/clepit.apk', path.resolve(__dirname, '../artifacts/clepit-1.1.0.apk')],
 ]);
 if (!fs.existsSync(apk)) throw new Error('Primero genera artifacts/climatizacion-rg-preview.apk.');

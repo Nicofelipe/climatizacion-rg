@@ -10,22 +10,33 @@ function money(text:string){
  return Number.isSafeInteger(amount)&&amount>=0&&amount<=999999999?String(amount):'';
 }
 export function parseReceiptText(text:string):ReceiptReading{
- const lines=clean(text).split(/\r?\n/).map(line=>line.trim()).filter(Boolean).slice(0,1000);
+ const lines=clean(text).split(/\r?\n/).map(line=>line.trim().replace(/^[*|=•·\s]+|[*|=•·\s]+$/g,'')).filter(Boolean).slice(0,1000);
  const result:ReceiptReading={receiptNumber:'',expenseDate:'',totalAmount:'',vatAmount:'',warnings:[]};
  const numbers=new Set<string>(),dates=new Set<string>(),totals=new Set<string>(),vats=new Set<string>();
  for(let i=0;i<lines.length;i++){
   const line=lines[i],next=lines[i+1]??'';
   if(/BOLETA|FOLIO/.test(line)&&!/(RUT|RESOLUCION|AUTORIZACION)/.test(line)){
-   const explicit=line.match(/(?:FOLIO|N(?:RO|UMERO)?[°.º:]?\s*|NUMERO)\s*[:#-]?\s*(\d{1,20})(?![\d.-])/);
+   const explicit=line.match(/\b(?:FOLIO|N(?:RO|UMERO|O)?)[°.º:]*\s*[:#-]?\s*(\d{1,20})(?![\d.-])/);
    if(explicit)numbers.add(explicit[1]);
-   else if(/^(?:N[°.º:]?\s*)?\d{1,20}$/.test(next))numbers.add(next.replace(/\D/g,''));
+   else if(/^BOLETA[.\s:-]+(?:ELECTRONICA[.\s:-]+)?\d{3,20}$/.test(line))numbers.add(line.match(/\d+$/)![0]);
+   else if(/^(?:N(?:RO|UMERO|O)?[°.º:]*\s*)?\d{1,20}$/.test(next))numbers.add(next.replace(/\D/g,''));
+   else if(/^BOLETA[.\s:]*$/.test(line)&&/^ELECTRONICA[.\s:]*$/.test(next)){
+    const folio=lines[i+2]??'';if(/^(?:N(?:RO|O)?[°.º:]*\s*)?\d{3,20}$/.test(folio))numbers.add(folio.replace(/\D/g,''));
+   }
   }
-  if(/^(?:FOLIO|NRO|NUMERO|N[°.º])\s*[:#-]?\s*\d{1,20}$/.test(line))numbers.add(line.replace(/\D/g,''));
+  if(/^(?:FOLIO|N(?:RO|UMERO|O)?)[°.º:]*\s*[:#-]?\s*\d{1,20}$/.test(line))numbers.add(line.replace(/\D/g,''));
   if(!/VENCIMIENTO|RESOLUCION|AUTORIZACION/.test(line)){
-   const candidates=[...line.matchAll(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](20\d{2})\b/g)];
-   const iso=[...line.matchAll(/\b(20\d{2})-(\d{2})-(\d{2})\b/g)];
+   const candidates=[...line.matchAll(/\b(\d{1,2})\s*[\/.-]\s*(\d{1,2})\s*[\/.-]\s*(20\d{2})\b/g)];
+   const iso=[...line.matchAll(/\b(20\d{2})\s*[\/.-]\s*(\d{1,2})\s*[\/.-]\s*(\d{1,2})\b/g)];
    for(const match of candidates){const value=`${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;if(validDay(value))dates.add(value);}
-   for(const match of iso){if(validDay(match[0]))dates.add(match[0]);}
+   for(const match of iso){const value=`${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`;if(validDay(value))dates.add(value);}
+   const months=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+   for(const match of line.matchAll(/\b(\d{1,2})\s+(?:DE\s+)?(ENERO|ENE|FEBRERO|FEB|MARZO|MAR|ABRIL|ABR|MAYO|MAY|JUNIO|JUN|JULIO|JUL|AGOSTO|AGO|SEPTIEMBRE|SETIEMBRE|SEPT|SEP|SET|OCTUBRE|OCT|NOVIEMBRE|NOV|DICIEMBRE|DIC)\.?\s+(?:DE\s+)?(20\d{2})\b/g)){
+    const month=match[2].startsWith('SET')?9:months.indexOf(match[2].slice(0,3))+1;const value=`${match[3]}-${String(month).padStart(2,'0')}-${match[1].padStart(2,'0')}`;if(validDay(value))dates.add(value);
+   }
+   if(/\bFECHA\b|EMISION/.test(line))for(const match of line.matchAll(/\b(\d{1,2})\s*[\/.-]\s*(\d{1,2})\s*[\/.-]\s*(\d{2})(?!\d)/g)){
+    const value=`20${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;if(validDay(value))dates.add(value);
+   }
   }
   const amount=(label:RegExp)=>{
    const match=line.match(label);if(!match)return '';
@@ -33,12 +44,12 @@ export function parseReceiptText(text:string):ReceiptReading{
    // OCR may split a currency symbol and the amount into consecutive lines.
    const following=next==='$'?(lines[i+2]??''):next;
    const source=/\d/.test(part)?part:(/^[\d$.,\s-]+$/.test(following)?following:'');
-   const found=[...source.matchAll(/\d[\d.,]*(?:[ \t]+\d{3}(?!\d))*[.,]?-?/g)].map(item=>money(item[0])).filter(value=>value!=='');
+   const found=[...source.matchAll(/(?:[-−]\s*)?\d[\d.,]*(?:[ \t]+\d{3}(?!\d))*[.,]?-?/g)].map(item=>money(item[0])).filter(value=>value!=='');
    return new Set(found).size===1?found[0]:'';
   };
   // Never promote subtotals, net amounts or payment/change amounts to the receipt total.
-  if(!/SUB\s*TOTAL|TOTAL\s+(?:NETO|IVA|EXENTO)|EFECTIVO|VUELTO|PROPINA|TOTAL\s+(?:MINUTOS|PAGADO|AHORRO|DESCUENTO)/.test(line)){
-   const value=amount(/^(?:(?:MONTO|IMPORTE|VALOR)\s+)?TOTAL\b(?:\s+(?:A\s+PAGAR|BOLETA|COMPRA|VENTA|FINAL))?\s*[:=$]?\s*/);if(value)totals.add(value);
+  if(!/SUB\s*TOTAL|TOTAL(?:ES)?\s+(?:DE\s+)?(?:NETO|IVA|EXENTO)|EFECTIVO|VUELTO|PROPINA|TOTAL(?:ES)?\s+(?:DE\s+)?(?:MINUTOS|PAGADO|AHORRO|DESCUENTO|ITEMS|ARTICULOS|PRODUCTOS|PUNTOS|UNIDADES)/.test(line)){
+   const value=amount(/^(?:(?:MONTO|IMPORTE|VALOR)\s+)?TOTAL(?:ES)?\b(?:\s+(?:A\s+PAGAR|BOLETA|COMPRA|VENTA|FINAL))?\s*[:=$]?\s*/);if(value)totals.add(value);
   }
   const vat=amount(/\b(?:I\.?\s*V\.?\s*A\.?)(?=\s|[:($=]|$)/);if(vat)vats.add(vat);
  }

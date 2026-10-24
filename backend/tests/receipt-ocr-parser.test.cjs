@@ -18,6 +18,33 @@ test('IVA larger than total must be corrected',()=>{
  const value=parseReceiptText('TOTAL 1.000\nIVA 1.500');assert.equal(value.vatAmount,'');assert.match(value.warnings.join(' '),/supera el total/);
 });
 
+test('supermarket heading punctuation, unmarked folio and plural totals are supported',()=>{
+ const result=parseReceiptText('RUT 76.123.456-7\nBOLETA. ELECTRONICA 000123456\nFECHA EMISION: 24 / 10 / 2026\n*** TOTALES $11.900 ***\nIVA (19%): 1.900\nTOTAL PRODUCTOS 5');
+ assert.equal(result.receiptNumber,'000123456');assert.equal(result.expenseDate,'2026-10-24');assert.equal(result.totalAmount,'11900');assert.equal(result.vatAmount,'1900');
+ assert.deepEqual(result.warnings,[]);
+});
+
+test('split electronic receipt headings and common Spanish dates are supported',()=>{
+ for(const date of ['FECHA: 24 de octubre de 2026','FECHA: 24 OCT. 2026','FECHA 24/10/26','2026 / 10 / 24']){
+  const result=parseReceiptText(`BOLETA\nELECTRONICA\nNRO. 123456\n${date}\nTOTAL 1.000\nIVA 160`);
+  assert.equal(result.receiptNumber,'123456');assert.equal(result.expenseDate,'2026-10-24');
+ }
+ assert.equal(parseReceiptText('FECHA 15 SETIEMBRE 2026').expenseDate,'2026-09-15');
+});
+
+test('transaction labels, units and negative refunds are not promoted to receipt fields',()=>{
+ assert.equal(parseReceiptText('BOLETA ELECTRONICA TRANSACCION 123456').receiptNumber,'');
+ assert.equal(parseReceiptText('BOLETA ELECTRONICA 39').receiptNumber,'');
+ for(const line of ['TOTAL PRODUCTOS 5','TOTALES DE UNIDADES 8','TOTAL DE IVA 160','TOTAL -1.000','TOTAL − 1.000'])assert.equal(parseReceiptText(line).totalAmount,'');
+ assert.equal(parseReceiptText('BOLETA ELECTRONICA\nNRO. 123456').receiptNumber,'123456');
+ assert.equal(parseReceiptText('FECHA 31/02/26').expenseDate,'');
+});
+
+test('conflicting dates and totals remain editable instead of guessing',()=>{
+ const result=parseReceiptText('FECHA 24 OCTUBRE 2026\nFECHA 25/10/2026\nTOTAL 1.000\nTOTALES 2.000');
+ assert.equal(result.expenseDate,'');assert.equal(result.totalAmount,'');assert.match(result.warnings.join(' '),/varios valores/);
+});
+
 test('Chilean prose VAT, spaced currency and terminal punctuation are read',()=>{
  const value=parseReceiptText('TOTAL: $ 11.900.-\nEl IVA de esta boleta es $ 1.900\nPAGADO 11.900\nTOTAL MINUTOS 45');
  assert.equal(value.totalAmount,'11900');assert.equal(value.vatAmount,'1900');

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Clepit",
     "slug": "climatizacion-rg",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
 
@@ -15,7 +15,7 @@
     },
 
     "android": {
-      "versionCode": 12,
+      "versionCode": 13,
       "softwareKeyboardLayoutMode": "resize",
       "package": "cl.rg.climatizacion",
       "adaptiveIcon": {
