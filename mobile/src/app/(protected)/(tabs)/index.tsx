@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ReceiptEntryOptions from '@/components/common/ReceiptEntryOptions';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Image,Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
@@ -48,7 +49,7 @@ export default function Dashboard() {
 
       <View>
         <Text style={styles.greeting}>{user?.firstName?.trim() ? `Hola, ${user.firstName.trim()}.` : 'Hola.'}</Text>
-        <Pressable accessibilityRole="button" onPress={()=>router.push('/(protected)/expenses/scan')} style={{padding:16,borderRadius:16,backgroundColor:'#DFF4EC',flexDirection:'row',alignItems:'center',gap:12,marginTop:15}}><Ionicons name="scan-outline" size={29} color="#0F8277"/><View style={{flex:1}}><Text style={{fontWeight:'800',color:'#0F8277',fontSize:16}}>Registrar con cámara</Text><Text style={{color:'#42665D',fontSize:12,marginTop:4}}>Lectura de boletas · versión de pruebas</Text></View><Ionicons name="chevron-forward" size={20} color="#0F8277"/></Pressable>
+        <ReceiptEntryOptions/>
         <Text style={styles.subtitle}>{companyView ? 'Gastos de todos los integrantes de tu empresa, incluidos los tuyos.' : 'Este resumen incluye únicamente tus propias boletas.'}</Text>
       </View>
       {admin?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}
@@ -83,7 +84,7 @@ export default function Dashboard() {
           <View style={[styles.actionCard, wide && { flex: 1 }]}>
             <View style={styles.actionIcon}><Ionicons name="scan-outline" size={24} color="#0F8277" /></View>
             <View style={{ gap: 8 }}><Text style={styles.cardTitle}>Un gasto menos{ '\n' }por recordar.</Text><Text style={styles.body}>Fotografía tu boleta y regístrala al momento. Tu respaldo queda junto a los de tu empresa.</Text></View>
-            <Pressable style={styles.primaryButton} accessibilityRole="button" onPress={() => router.push('/(protected)/expenses/create')}><Ionicons name="add" size={20} color="white" /><Text style={styles.primaryText}>Registrar boleta</Text></Pressable>
+            <Pressable style={styles.primaryButton} accessibilityRole="button" onPress={() => router.push('/(protected)/expenses/new')}><Ionicons name="add" size={20} color="white" /><Text style={styles.primaryText}>Registrar boleta</Text></Pressable>
           </View>
         </View>
 

@@ -79,7 +79,7 @@ export default function ExpensesOverview() {
           <View style={{ flex: 1 }}><Text style={styles.summaryLabel}>REGISTRO DEL ALCANCE ELEGIDO</Text><Text style={styles.summaryNumber}>{isLoading && !expenses.length ? '…' : scoped.length}</Text><Text style={styles.summaryHint}>boletas registradas · todos los períodos</Text></View>
           <View style={styles.summarySide}><Text style={styles.summarySideNumber}>{pending}</Text><Text style={styles.summaryHint}>pendientes</Text><View style={{ height: 8 }} /><Text style={styles.summarySideNumber}>{approved}</Text><Text style={styles.summaryHint}>aprobadas</Text></View>
         </View>
-        <Pressable accessibilityRole="button" style={styles.primary} onPress={() => router.push('/(protected)/expenses/create')}><Ionicons name="add-circle-outline" size={21} color="white" /><Text style={styles.primaryText}>Registrar una boleta</Text></Pressable>
+        <Pressable accessibilityRole="button" style={styles.primary} onPress={() => router.push('/(protected)/expenses/new')}><Ionicons name="add-circle-outline" size={21} color="white" /><Text style={styles.primaryText}>Registrar una boleta</Text></Pressable>
         <View style={styles.filterPanel}>
         <Text style={styles.filterHeading}>Filtrar boletas</Text>
         {user?.role==='ADMIN'?<View>{scope==='company'?<Pressable accessibilityRole="button" style={styles.search} onPress={()=>setChoosingWorker(true)}><Ionicons name="people-outline" size={20} color={Colors.primary}/><Text style={styles.filterText}>{workerLabel}</Text><Ionicons name="chevron-down" size={17} color={Colors.primary}/></Pressable>:null}</View>:null}

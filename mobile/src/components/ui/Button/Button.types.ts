@@ -7,4 +7,5 @@ export interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   selected?: boolean;
+  variant?: 'primary' | 'secondary' | 'choice';
 }

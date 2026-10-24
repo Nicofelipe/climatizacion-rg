@@ -19,3 +19,5 @@ backend/uploads/
 
 # Local build artifacts and downloaded tools
 artifacts/
+mobile/modules/**/android/build/
+mobile/modules/**/android/.gradle/

@@ -65,7 +65,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen name="employees" options={{title:'Equipo',href:user?.role==='ADMIN'?undefined:null,tabBarIcon:({color,size})=><Ionicons name="people-outline" color={color} size={size}/>}}/>
     </Tabs>
-    {!typing?<Pressable accessibilityRole="button" accessibilityLabel="Registrar una boleta" onPress={()=>router.push('/(protected)/expenses/create')} style={{position:'absolute',right:20,bottom:83,width:58,height:58,borderRadius:29,backgroundColor:'#0F8277',alignItems:'center',justifyContent:'center',borderWidth:2,borderColor:'white',elevation:7,boxShadow:'0px 4px 12px #0F827744'}}><Ionicons name="add" size={34} color="white"/></Pressable>:null}
+    {!typing?<Pressable accessibilityRole="button" accessibilityLabel="Registrar una boleta" onPress={()=>router.push('/(protected)/expenses/new')} style={{position:'absolute',right:20,bottom:83,width:58,height:58,borderRadius:29,backgroundColor:'#0F8277',alignItems:'center',justifyContent:'center',borderWidth:2,borderColor:'white',elevation:7,boxShadow:'0px 4px 12px #0F827744'}}><Ionicons name="add" size={34} color="white"/></Pressable>:null}
     </View>
   );
 }

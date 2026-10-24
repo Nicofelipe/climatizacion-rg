@@ -16,6 +16,7 @@ export default function Input({
   error,
 }: InputProps) {
   const [visible,setVisible]=useState(false);
+  const [focused,setFocused]=useState(false);
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
@@ -24,7 +25,9 @@ export default function Input({
 
       <View style={{flexDirection:'row',alignItems:'center'}}><TextInput
         accessibilityLabel={label}
-        style={[styles.input,{flex:1,color:Colors.text,paddingRight:secureTextEntry?52:16}]}
+        style={[styles.input,{flex:1,color:Colors.text,paddingRight:secureTextEntry?52:16,borderColor:error?Colors.danger:focused?Colors.primary:Colors.border,backgroundColor:focused?'#F5FCF9':Colors.white}]}
+        onFocus={()=>setFocused(true)}
+        onBlur={()=>setFocused(false)}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}

@@ -17,6 +17,24 @@ test('labels on separate lines and zero IVA are supported',()=>{
 test('IVA larger than total must be corrected',()=>{
  const value=parseReceiptText('TOTAL 1.000\nIVA 1.500');assert.equal(value.vatAmount,'');assert.match(value.warnings.join(' '),/supera el total/);
 });
+
+test('Chilean prose VAT, spaced currency and terminal punctuation are read',()=>{
+ const value=parseReceiptText('TOTAL: $ 11.900.-\nEl IVA de esta boleta es $ 1.900\nPAGADO 11.900\nTOTAL MINUTOS 45');
+ assert.equal(value.totalAmount,'11900');assert.equal(value.vatAmount,'1900');
+ const spaced=parseReceiptText('MONTO TOTAL $ 12 345\nIVA INCLUIDO (19%): $ 1 971');
+ assert.equal(spaced.totalAmount,'12345');assert.equal(spaced.vatAmount,'1971');
+});
+
+test('currency-only line is skipped, subtotal and payment values are not substituted',()=>{
+ const value=parseReceiptText('TOTAL\n$\n9.520\nIVA DE ESTA BOLETA ES\n$1.520');
+ assert.equal(value.totalAmount,'9520');assert.equal(value.vatAmount,'1520');
+ for(const text of ['SUBTOTAL 5.000\nTOTAL PAGADO 6.000','TOTAL\nBOLETA 123','TOTAL NETO 5.000\nTOTAL IVA 950'])assert.equal(parseReceiptText(text).totalAmount,'');
+});
+
+test('conflicting totals and non-integral VAT remain blank for manual review',()=>{
+ assert.equal(parseReceiptText('TOTAL 1.000\nTOTAL A PAGAR 2.000').totalAmount,'');
+ assert.equal(parseReceiptText('TOTAL 1.000\nEL IVA DE ESTA BOLETA ES 159,66').vatAmount,'');
+});
 test('scan drafts can be consumed once and never cross user or company',()=>{
  const {setScannedReceiptDraft,takeScannedReceiptDraft}=require('../../mobile/src/utils/scannedReceiptDraft.ts');
  setScannedReceiptDraft({userId:1,companyId:3,uri:'file:///private/photo.jpg'});assert.equal(takeScannedReceiptDraft(2,3),null);

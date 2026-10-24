@@ -1,7 +1,7 @@
 export interface ReceiptReading {receiptNumber:string;expenseDate:string;totalAmount:string;vatAmount:string;warnings:string[]}
 const clean=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
 function money(text:string){
- const raw=text.replace(/\s/g,'').replace(/\$/g,'');
+ const raw=text.replace(/\s/g,'').replace(/\$/g,'').replace(/\.-$|,-$|\.$/,'');
  if(!/^\d[\d.,]*$/.test(raw))return '';
  // CLP: a decimal suffix of ,00/.00 is allowed; do not silently round cents.
  let value=raw;
@@ -27,9 +27,20 @@ export function parseReceiptText(text:string):ReceiptReading{
    for(const match of candidates){const value=`${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;if(validDay(value))dates.add(value);}
    for(const match of iso){if(validDay(match[0]))dates.add(match[0]);}
   }
-  const amount=(label:RegExp)=>{if(!label.test(line))return '';const part=line.replace(label,'').replace(/\(?19\s*%\)?/g,'').trim();const found=part.match(/\$?\s*\d[\d.,]*(?:\s|$)/g);return money(found?.at(-1)?.trim()??(/^[\d$.,\s]+$/.test(next)?next:''));};
-  if(!/SUBTOTAL|SUB TOTAL|TOTAL NETO|TOTAL IVA|TOTAL EXENTO|EFECTIVO|VUELTO|PROPINA/.test(line)){const value=amount(/^(?:MONTO\s+)?TOTAL(?:\s+A\s+PAGAR)?\s*[:$]?\s*/);if(value)totals.add(value);}
-  const vat=amount(/^(?:MONTO\s+)?I\.?V\.?A\.?\s*[:$]?\s*/);if(vat)vats.add(vat);
+  const amount=(label:RegExp)=>{
+   const match=line.match(label);if(!match)return '';
+   const part=line.slice((match.index??0)+match[0].length).replace(/\(?\d{1,2}(?:[.,]\d+)?\s*%\)?/g,'').trim();
+   // OCR may split a currency symbol and the amount into consecutive lines.
+   const following=next==='$'?(lines[i+2]??''):next;
+   const source=/\d/.test(part)?part:(/^[\d$.,\s-]+$/.test(following)?following:'');
+   const found=[...source.matchAll(/\d[\d.,]*(?:[ \t]+\d{3}(?!\d))*[.,]?-?/g)].map(item=>money(item[0])).filter(value=>value!=='');
+   return new Set(found).size===1?found[0]:'';
+  };
+  // Never promote subtotals, net amounts or payment/change amounts to the receipt total.
+  if(!/SUB\s*TOTAL|TOTAL\s+(?:NETO|IVA|EXENTO)|EFECTIVO|VUELTO|PROPINA|TOTAL\s+(?:MINUTOS|PAGADO|AHORRO|DESCUENTO)/.test(line)){
+   const value=amount(/^(?:(?:MONTO|IMPORTE|VALOR)\s+)?TOTAL\b(?:\s+(?:A\s+PAGAR|BOLETA|COMPRA|VENTA|FINAL))?\s*[:=$]?\s*/);if(value)totals.add(value);
+  }
+  const vat=amount(/\b(?:I\.?\s*V\.?\s*A\.?)(?=\s|[:($=]|$)/);if(vat)vats.add(vat);
  }
  const select=(set:Set<string>,name:string)=>{if(set.size===1)return [...set][0];result.warnings.push(set.size>1?`Hay varios valores posibles para ${name}. Confirma el correcto en la foto.`:`No se identificó ${name}. Complétalo manualmente.`);return '';};
  result.receiptNumber=select(numbers,'el número de boleta');result.expenseDate=select(dates,'la fecha');result.totalAmount=select(totals,'el total');result.vatAmount=select(vats,'el IVA');

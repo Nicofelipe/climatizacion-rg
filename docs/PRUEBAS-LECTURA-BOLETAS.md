@@ -1,6 +1,10 @@
 # Clepit Pruebas: lectura de boletas
 
-Edición Android independiente: **Clepit Pruebas 0.1.0**, paquete `cl.rg.clepit.pruebas`. No reemplaza Clepit 1.0.10. Código aislado en el worktree `C:\Dev\clepit-camera-tests`, rama `feature/clepit-camera-ocr`; se copió la base de trabajo sin archivos de credenciales ni configuración privada.
+Edición Android independiente: **Clepit Pruebas 0.1.2**, paquete `cl.rg.clepit.pruebas`. No reemplaza Clepit 1.0.10. Código aislado en el worktree `C:\Dev\clepit-camera-tests`, rama `feature/clepit-camera-ocr`; se copió la base de trabajo sin archivos de credenciales ni configuración privada.
+
+La revisión 0.1.2 presenta Escanear boleta y Registro manual juntos en Inicio. El botón flotante + y Registrar boleta abren la misma elección. Se unifican alturas, bordes, estados de selección y respuesta al pulsar de los botones; los campos resaltan el foco y los errores. La edición de una boleta existente conserva el acceso directo a su formulario. Validación visual final pendiente en el teléfono.
+
+La revisión 0.1.1 amplía la lectura de frases como «El IVA de esta boleta es», montos separados del símbolo de moneda, espacios de miles y terminaciones `.-`. No utiliza subtotal, vuelto o total de minutos como total financiero. Los valores ambiguos siguen requiriendo corrección manual. Todos los campos del escaneo son obligatorios; IVA cero debe indicarse explícitamente. Se agrega Estacionamiento al catálogo (migración aditiva 020). Pruebas automatizadas y compilación no reemplazan la validación con fotos reales en el teléfono.
 
 ## Probar
 

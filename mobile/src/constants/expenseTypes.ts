@@ -6,4 +6,5 @@ export const expenseTypes: ExpenseTypeOption[] = [
   { id: 3, name: 'Materiales' },
   { id: 4, name: 'Insumos' },
   { id: 5, name: 'Otros' },
+  { id: 6, name: 'Estacionamiento' },
 ];

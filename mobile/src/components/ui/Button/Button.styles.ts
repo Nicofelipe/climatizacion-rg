@@ -10,14 +10,20 @@ export default StyleSheet.create({
   button: {
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 14,
   },
 
   text: {
     color: Colors.white,
-    fontSize: Typography.body,
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
   },
 
   disabled: {

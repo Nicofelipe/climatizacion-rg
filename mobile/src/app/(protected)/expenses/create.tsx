@@ -360,11 +360,15 @@ export default function CreateExpenseScreen() {
                     style={{
                         gap: Spacing.sm,
                         marginBottom: Spacing.lg,
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
                     }}
                 >
                     {expenseTypes.map((type) => (
+                        <View key={type.id} style={{flexBasis:'46%',flexGrow:1}}>
                         <Button
                             key={type.id}
+                            variant="choice"
                             selected={expenseTypeId===type.id}
                             title={
                                 expenseTypeId === type.id
@@ -373,6 +377,7 @@ export default function CreateExpenseScreen() {
                             }
                             onPress={() => setExpenseTypeId(type.id)}
                         />
+                        </View>
                     ))}
                 </View>
 

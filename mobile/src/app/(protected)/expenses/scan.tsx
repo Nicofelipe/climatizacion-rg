@@ -36,6 +36,7 @@ export default function ScanReceipt(){
  }
  function continueToForm(){
   if(!user||busy)return;setError('');
+  if(!uri){setError('La foto de la boleta es obligatoria.');return;}
   if(!number.trim()||number.trim().length>50){setError('Revisa el número de boleta (máximo 50 caracteres).');return;}
   const dateError=receiptSubmissionError(date);if(dateError){setError(dateError);return;}
   if(!/^\d+$/.test(total)||Number(total)<=0||Number(total)>999999999||!/^\d+$/.test(vat)||Number(vat)>Number(total)){setError('Revisa el total y el IVA en pesos enteros; el IVA no puede superar el total.');return;}
@@ -48,12 +49,13 @@ export default function ScanReceipt(){
   <Text style={{fontSize:27,fontWeight:'800',color:Colors.text}}>Escanear boleta</Text>
   <View style={{padding:14,borderRadius:14,backgroundColor:'#FFF4D6'}}><Text style={{color:'#74520A',lineHeight:21}}>CLEPIT PRUEBAS · La lectura se realiza en este teléfono. Los datos pueden contener errores y siempre debes revisarlos. No se guarda nada automáticamente.</Text></View>
   <Button title="Tomar foto de la boleta" onPress={()=>{void pick(true);}} disabled={busy}/>
-  <Button title="Elegir imagen de la galería" onPress={()=>{void pick(false);}} disabled={busy}/>
+  <Button variant="secondary" title="Elegir imagen de la galería" onPress={()=>{void pick(false);}} disabled={busy}/>
   {uri?<Pressable accessibilityRole="button" accessibilityLabel="Ampliar foto para comprobar los datos" onPress={()=>setExpanded(true)}><Image source={{uri}} style={{width:'100%',height:280,borderRadius:14,backgroundColor:'#EEF2F6'}} resizeMode="contain"/><Text style={{textAlign:'center',color:Colors.primary,marginTop:8}}>Toca para ampliar y revisar la foto</Text></Pressable>:null}
   {busy?<View style={{gap:10}}><ActivityIndicator color={Colors.primary}/><Text style={{textAlign:'center',color:Colors.textSecondary}}>Leyendo los datos en el teléfono…</Text></View>:null}
   {error?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{error}</Text>:null}
   {read&&!busy?<>
    <Text style={{fontSize:19,fontWeight:'700',color:Colors.text}}>Comprueba los datos de la foto</Text>
+   <Text style={{color:Colors.textSecondary,lineHeight:20}}>Todos los campos son obligatorios, además de la foto y el tipo de gasto. Si la boleta indica IVA cero o exento, escribe 0; no dejes el campo vacío.</Text>
    {warnings.map(warning=><Text key={warning} style={{color:'#946200',lineHeight:20}}>• {warning}</Text>)}
    <Input label="Número de boleta" value={number} onChangeText={v=>{setNumber(v);setConfirmed(false);}}/>
    <Input label="Fecha de emisión · AAAA-MM-DD" value={date} onChangeText={v=>{setDate(v);setConfirmed(false);}}/>
@@ -61,7 +63,7 @@ export default function ScanReceipt(){
    <Input label="IVA leído · CLP (referencia de la foto)" keyboardType="numeric" value={vat} onChangeText={v=>{setVat(v);setConfirmed(false);}}/>
    <Text style={{color:Colors.textSecondary,lineHeight:20}}>El IVA leído se conserva como referencia en la descripción. El IVA final de la rendición lo calcula el servidor según el tipo de gasto y las reglas de tu empresa.</Text>
    <Text style={{fontWeight:'700',color:Colors.text}}>Selecciona el tipo de gasto</Text>
-   {expenseTypes.map(item=><Button key={item.id} title={item.name} selected={type===item.id} onPress={()=>{setType(item.id);setConfirmed(false);}}/>)}
+   <View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}>{expenseTypes.map(item=><View key={item.id} style={{flexBasis:'46%',flexGrow:1}}><Button variant="choice" title={item.name} selected={type===item.id} onPress={()=>{setType(item.id);setConfirmed(false);}}/></View>)}</View>
    <Pressable accessibilityRole="checkbox" accessibilityState={{checked:confirmed}} onPress={()=>setConfirmed(v=>!v)} style={{flexDirection:'row',gap:10,paddingVertical:10}}><Ionicons name={confirmed?'checkbox':'square-outline'} size={25} color={Colors.primary}/><Text style={{flex:1,color:Colors.text,lineHeight:21}}>Revisé el número, la fecha, el monto y el IVA contra la imagen.</Text></Pressable>
    <Button title="Usar estos datos en el formulario" onPress={continueToForm}/>
    <Text style={{color:Colors.textSecondary,lineHeight:20}}>El siguiente paso permite revisar todo nuevamente. Solo Guardar boleta enviará el registro a tu empresa con esta misma foto.</Text>
