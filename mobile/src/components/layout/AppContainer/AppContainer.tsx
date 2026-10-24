@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View } from "react-native";
 
 import styles from "./AppContainer.styles";
 
@@ -12,8 +12,8 @@ export default function AppContainer({
   children,
 }: Props) {
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {children}
-    </SafeAreaView>
+    </View>
   );
 }

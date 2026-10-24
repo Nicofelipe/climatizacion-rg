@@ -8,12 +8,12 @@ import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
   container: {
-    marginBottom: Spacing.lg,
+    marginBottom: 12,
   },
 
   label: {
     marginBottom: Spacing.sm,
-    fontSize: Typography.body,
+    fontSize: 13,
     color: Colors.text,
     fontWeight: '600',
   },
@@ -21,11 +21,12 @@ export default StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: BorderRadius.md,
+    borderRadius: 14,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: Typography.body,
     backgroundColor: Colors.white,
+    minHeight: 50,
   },
 
   error: {

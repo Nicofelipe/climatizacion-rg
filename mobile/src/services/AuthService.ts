@@ -1,31 +1,8 @@
-import { mockUser } from "@/mock/user";
+import { loginApi } from '@/api/auth.api';
+import { LoginRequest } from '@/types/auth';
 
-export class AuthService{
-
-    static async login(
-
-        email:string,
-
-        password:string
-
-    ){
-
-        if(
-
-            email==="admin@climatizacionrg.cl"
-
-            &&
-
-            password==="123456"
-
-        ){
-
-            return mockUser;
-
-        }
-
-        throw new Error("Correo o contraseña incorrectos");
-
-    }
-
+export class AuthService {
+  static async login(data: LoginRequest) {
+    return loginApi(data);
+  }
 }

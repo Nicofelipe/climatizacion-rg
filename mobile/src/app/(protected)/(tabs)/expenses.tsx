@@ -1,9 +1,5 @@
-import { Text, View } from 'react-native';
+import ExpensesOverview from '@/components/common/ExpensesOverview';
 
-export default function Expenses() {
-  return (
-    <View>
-      <Text>Boletas</Text>
-    </View>
-  );
+export default function ExpensesScreen() {
+  return <ExpensesOverview />;
 }

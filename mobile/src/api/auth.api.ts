@@ -1,7 +1,17 @@
-import { LoginRequest } from "@/types/auth";
+import { LoginRequest, LoginResponse } from '@/types/auth';
+import { requestJson } from './http';
 
-export async function login(data:LoginRequest){
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-    console.log(data);
+export async function loginApi(
+  data: LoginRequest
+): Promise<LoginResponse> {
+  return requestJson(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
 
 }
