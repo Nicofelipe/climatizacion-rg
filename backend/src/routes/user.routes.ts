@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { createEmployeeController } from '../controllers/user.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
 import { requireRole } from '../middlewares/role.middleware';
-import { listEmployeesController, updateEmployeeController } from '../controllers/employeeManagement.controller';
+import { listEmployeesController, updateEmployeeController, deactivateEmployeeController } from '../controllers/employeeManagement.controller';
 import { getApprovalPolicy } from '../services/approvalPolicy.service';
 
 const router = Router();
@@ -14,6 +14,7 @@ router.get('/approval-policy',authenticateToken,requireRole('ADMIN'),async(req,r
 });
 router.get('/',authenticateToken,requireRole('ADMIN'),listEmployeesController);
 router.put('/:id',authenticateToken,requireRole('ADMIN'),updateEmployeeController);
+router.post('/:id/deactivate',authenticateToken,requireRole('ADMIN'),deactivateEmployeeController);
 
 router.post(
     '/',

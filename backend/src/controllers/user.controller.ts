@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { createEmployee } from '../services/user.service';
 import { validNewPassword,passwordRequirementsMessage } from '../utils/passwordRequirements';
+import {normalizeRut} from '../utils/rut';
 
 export async function createEmployeeController(
     req: AuthenticatedRequest,
@@ -29,6 +30,8 @@ export async function createEmployeeController(
             phone,
             role='EMPLOYEE',
         } = req.body;
+        const rut=req.body.rut===undefined?undefined:normalizeRut(req.body.rut);
+        if(rut===null){res.status(400).json({message:'Ingresa un RUT válido con dígito verificador.'});return;}
         if(role!=='EMPLOYEE'&&role!=='ADMIN'){res.status(400).json({message:'Selecciona trabajador o supervisor / administrador.'});return;}
 
         if (
@@ -71,6 +74,7 @@ export async function createEmployeeController(
             password,
             phone,
             role,
+            rut,
             actorId:req.user.userId,
         });
 

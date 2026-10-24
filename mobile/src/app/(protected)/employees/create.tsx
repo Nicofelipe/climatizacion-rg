@@ -20,6 +20,7 @@ export default function CreateEmployeeScreen() {
   const [role,setRole]=useState<'EMPLOYEE'|'ADMIN'>('EMPLOYEE');
   const [confirmPassword,setConfirmPassword]=useState('');
   const [phone, setPhone] = useState('');
+  const [rut,setRut]=useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -29,6 +30,7 @@ export default function CreateEmployeeScreen() {
   async function submit() {
     if (!token || saving) return;
     setError(null);
+    if(!rut.trim()){setError('Ingresa el RUT del integrante con dígito verificador.');return;}
     if (!firstName.trim() || !lastName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('Completa nombre, apellido y un correo válido.');
       return;
@@ -38,7 +40,7 @@ export default function CreateEmployeeScreen() {
     setSaving(true);
     try {
       await createEmployeeApi(token, { firstName: firstName.trim(), lastName: lastName.trim(),
-        email: email.trim().toLowerCase(), password, phone: phone.trim() || undefined,role });
+        email: email.trim().toLowerCase(), password, phone: phone.trim() || undefined,role,rut });
       setPassword('');
       setConfirmPassword('');
       setSuccess(true);
@@ -62,6 +64,7 @@ export default function CreateEmployeeScreen() {
             <Text style={{ color: Colors.textSecondary }}>La cuenta quedará vinculada a tu empresa con el rol seleccionado.</Text>
             <Input label="Nombre" value={firstName} onChangeText={setFirstName} />
             <Input label="Apellido" value={lastName} onChangeText={setLastName} />
+            <Input label="RUT" value={rut} onChangeText={setRut} placeholder="12.345.678-5"/>
             <Input label="Correo de acceso" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="nombre@empresa.cl" />
             <Text style={{color:Colors.text,fontWeight:'600'}}>Rol</Text><View style={{gap:8}}>{([{value:'EMPLOYEE',label:'Trabajador'},{value:'ADMIN',label:'Supervisor / administrador'}] as const).map(item=><Pressable key={item.value} accessibilityRole="radio" accessibilityState={{checked:role===item.value}} onPress={()=>setRole(item.value)} style={{padding:13,borderRadius:12,borderWidth:1,borderColor:role===item.value?Colors.primary:Colors.border,backgroundColor:role===item.value?'#E5F5EF':'white'}}><Text style={{color:role===item.value?Colors.primary:Colors.text,fontWeight:'600'}}>{role===item.value?'●':'○'} {item.label}</Text></Pressable>)}</View>
             {role==='ADMIN'?<Text style={{color:'#A16207',fontSize:12,lineHeight:20}}>Podrá revisar boletas y gestionar personas de tu empresa. Al existir varios administradores activos, cada uno necesitará que otro apruebe sus propias boletas.</Text>:null}

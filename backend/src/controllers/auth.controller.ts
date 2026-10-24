@@ -23,6 +23,9 @@ export async function loginController(req: Request, res: Response) {
       token: result.token,
     });
   } catch (error) {
+    if(error instanceof Error&&error.message==='ACCOUNT_INACTIVE'){
+      res.status(403).json({message:'Tu cuenta fue dada de baja. No tienes autorización para acceder. Contacta al administrador de tu empresa.'});return;
+    }
     if (
       error instanceof Error &&
       error.message === 'INVALID_CREDENTIALS'

@@ -54,7 +54,7 @@ export async function authenticateToken(
     try{account=await getPasswordAccount(payload.companyId,payload.userId);}
     catch{res.status(503).json({message:'No fue posible verificar la sesión. Inténtalo nuevamente.'});return;}
     if(!account||account.RoleName!==payload.role||account.PasswordVersion!==(payload.passwordVersion??0)){
-      res.status(401).json({message:'La sesión ya no es válida. Vuelve a iniciar sesión.'});return;
+      res.status(401).json({message:'Tu sesión ya no tiene autorización. La cuenta puede haber sido dada de baja o haber cambiado sus credenciales. Contacta al administrador o vuelve a iniciar sesión.'});return;
     }
     const policy=passwordPolicy(account);
     if(policy.expired&&!['/password/status','/password/change'].includes(req.path)){

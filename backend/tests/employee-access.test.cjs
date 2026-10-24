@@ -9,7 +9,7 @@ require.cache[filename] = { id: filename, filename, loaded: true, exports: {
 } };
 const { createEmployeeController } = require('../src/controllers/user.controller.ts');
 const policyFile=require.resolve('../src/services/passwordPolicy.service.ts');
-require.cache[policyFile]={id:policyFile,filename:policyFile,loaded:true,exports:{getPasswordAccount:async(companyId,userId)=>({RoleName:userId===1?'ADMIN':'EMPLOYEE',PasswordVersion:0}),passwordPolicy:()=>({expired:false})}};
+require.cache[policyFile]={id:policyFile,filename:policyFile,loaded:true,exports:{getPasswordAccount:async(companyId,userId)=>userId===9?null:({RoleName:userId===1?'ADMIN':'EMPLOYEE',PasswordVersion:0}),passwordPolicy:()=>({expired:false})}};
 const { authenticateToken } = require('../src/middlewares/auth.middleware.ts');
 const valid = { firstName: 'Ana', lastName: 'Prueba', email: 'ana@example.test', password: 'SamplePassword123' };
 function response() {
@@ -53,6 +53,7 @@ test('session middleware rejects OAuth state and malformed identity claims', asy
     for (const [payload, allowed] of [
       [{ userId: 1, companyId: 4, role: 'ADMIN' }, true],
       [{ userId: 2, companyId: 4, role: 'EMPLOYEE' }, true],
+      [{ userId: 9, companyId: 4, role: 'EMPLOYEE' }, false],
       [{ userId: 1, companyId: 4, purpose: 'GOOGLE_DRIVE_OAUTH' }, false],
       [{ userId: 1, companyId: 4, role: 'SUPERUSER' }, false],
       [{ userId: 1, companyId: -1, role: 'ADMIN' }, false],

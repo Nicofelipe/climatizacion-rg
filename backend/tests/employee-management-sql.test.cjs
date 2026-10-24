@@ -3,10 +3,10 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),driver=re
 const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
 const fixture=`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);
-CREATE TABLE #AppUser(Id int,CompanyId int,RoleId int,IsActive bit,FirstName nvarchar(100),LastName nvarchar(100),Email nvarchar(254),Phone nvarchar(30));
+CREATE TABLE #AppUser(Id int,CompanyId int,RoleId int,IsActive bit,FirstName nvarchar(100),LastName nvarchar(100),Email nvarchar(254),Phone nvarchar(30),Rut nvarchar(12) NULL);
 CREATE TABLE #AuditLog(Id int IDENTITY,CompanyId int,UserId int,Action nvarchar(100),Entity nvarchar(100),EntityId int,BeforeData nvarchar(max),AfterData nvarchar(max),Reason nvarchar(1000),CreatedAt datetime2);
 INSERT INTO #Role VALUES(1,N'ADMIN',1),(2,N'EMPLOYEE',1);
-INSERT INTO #AppUser VALUES(5,3,1,1,N'Admin',N'Uno',N'admin@test.cl',NULL),(6,3,2,1,N'Antiguo',N'Apellido',N'empleado@test.cl',NULL),(7,4,2,1,N'Otro',N'Empresa',N'otro@test.cl',NULL);
+INSERT INTO #AppUser VALUES(5,3,1,1,N'Admin',N'Uno',N'admin@test.cl',NULL,NULL),(6,3,2,1,N'Antiguo',N'Apellido',N'empleado@test.cl',NULL,NULL),(7,4,2,1,N'Otro',N'Empresa',N'otro@test.cl',NULL,NULL);
 `;
 let saved;
 const path=require.resolve('../src/database/sqlServer.ts');require.cache[path]={id:path,filename:path,loaded:true,exports:{executeQuery:(sql,params)=>new Promise((resolve,reject)=>{

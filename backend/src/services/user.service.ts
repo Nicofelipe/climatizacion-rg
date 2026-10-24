@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { executeQuery } from '../database/sqlServer';
 
 interface CreateEmployeeInput {
+    rut?:string;
     actorId:number;
     role:'EMPLOYEE'|'ADMIN';
     companyId: number;
@@ -70,6 +71,7 @@ export async function createEmployee(
                 Email,
                 PasswordHash,
                 Phone,
+                Rut,
                 IsActive,
                 MustChangePassword
             )
@@ -79,6 +81,7 @@ export async function createEmployee(
             (
                 ?,
                 (SELECT Id FROM dbo.Role WHERE Name = ? AND IsActive = 1),
+                ?,
                 ?,
                 ?,
                 ?,
@@ -103,6 +106,7 @@ export async function createEmployee(
                 normalizedEmail,
                 passwordHash,
                 input.phone?.trim() || null,
+                input.rut??null,
                 input.companyId,input.actorId,`Cuenta creada con rol ${input.role}.`,
             ]
         );

@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),driver=re
 const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
 const fixture=`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);
-CREATE TABLE #AppUser(Id int IDENTITY(10,1),CompanyId int,RoleId int,FirstName nvarchar(100),LastName nvarchar(100),Email nvarchar(254),PasswordHash nvarchar(255),Phone nvarchar(30),IsActive bit,MustChangePassword bit,CreatedAt datetime2 DEFAULT SYSUTCDATETIME());
+CREATE TABLE #AppUser(Id int IDENTITY(10,1),CompanyId int,RoleId int,FirstName nvarchar(100),LastName nvarchar(100),Email nvarchar(254),PasswordHash nvarchar(255),Phone nvarchar(30),Rut nvarchar(12),IsActive bit,MustChangePassword bit,CreatedAt datetime2 DEFAULT SYSUTCDATETIME());
 CREATE TABLE #AuditLog(CompanyId int,UserId int,Action nvarchar(100),Entity nvarchar(100),EntityId int,Reason nvarchar(1000),CreatedAt datetime2);
 INSERT INTO #Role VALUES(1,N'ADMIN',1),(2,N'EMPLOYEE',1);
 INSERT INTO #AppUser(CompanyId,RoleId,IsActive,Email) VALUES(3,1,1,N'admin@test.cl'),(3,2,1,N'taken@test.cl'),(4,1,1,N'other@test.cl');

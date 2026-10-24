@@ -20,6 +20,7 @@ interface LoginUserRow {
     LastName: string;
     Email: string;
     PasswordHash: string;
+    IsActive:boolean;
     RoleName: string;
 }
 
@@ -54,6 +55,7 @@ export async function loginService(email: string, password: string) {
         u.LastName,
         u.Email,
         u.PasswordHash,
+        u.IsActive,
         r.Name AS RoleName
       FROM dbo.AppUser AS u
       INNER JOIN dbo.Role AS r
@@ -61,7 +63,6 @@ export async function loginService(email: string, password: string) {
       INNER JOIN dbo.Company AS c
         ON c.Id = u.CompanyId
       WHERE u.Email = ?
-        AND u.IsActive = 1
         AND r.IsActive = 1
         AND c.IsActive = 1;
     `,
@@ -83,6 +84,8 @@ export async function loginService(email: string, password: string) {
     if (!passwordMatches) {
         throw new Error('INVALID_CREDENTIALS');
     }
+
+    if(!user.IsActive)throw new Error('ACCOUNT_INACTIVE');
 
     const account=await recordSuccessfulLogin(user.CompanyId,user.Id,'PASSWORD');
     if(account.PasswordHash!==user.PasswordHash)throw new Error('INVALID_CREDENTIALS');

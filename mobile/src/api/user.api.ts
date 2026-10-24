@@ -1,4 +1,5 @@
 export interface CreateEmployeeRequest {
+  rut?:string;
   role?:'EMPLOYEE'|'ADMIN';
   firstName: string;
   lastName: string;
