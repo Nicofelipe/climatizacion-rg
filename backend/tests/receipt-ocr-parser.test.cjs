@@ -8,6 +8,24 @@ test('receipt labels distinguish folio from RUT, authorization and payment numbe
 test('ambiguous document numbers remain empty rather than silently selecting one',()=>{
  const value=parseReceiptText('BOLETA N° 123\nFOLIO: 456\nTOTAL 1.000');assert.equal(value.receiptNumber,'');assert.match(value.warnings.join(' '),/varios valores/);
 });
+
+test('receipt labels support reversed order, abbreviations and ordinal circles',()=>{
+ for(const label of ['Número de boleta: 001234','Nº de boleta 001234','N° BOLETA: 001234','N˚ BOLETA 001234','N○ BOLETA 001234','Boleta número: 001234','Boleta N.º 001234','Boleta N . º 001234','Boleta Nro. 001234','Boleta No. 001234','Boleta N O 001234','BOL. N° 001234','BOL N° 001234','Boleta electrónica Nº001234','BOLETAELECTRONICAN°001234']){
+  assert.equal(parseReceiptText(label).receiptNumber,'001234',label);
+ }
+ assert.equal(parseReceiptText('BOLETA123456').receiptNumber,'123456');
+});
+test('explicit receipt heading wins over unrelated numbers without discarding mixed RUT rows',()=>{
+ for(const label of ['RUT 76.123.456-7 BOLETA N° 001234','BOLETA N°001234 RUT: 76.123.456-7','BOLETA ELECTRONICA N°001234 AUTORIZACION 987654','TRANSACCION\nN°987654\nN°555555\nBOLETA N°001234'])assert.equal(parseReceiptText(label).receiptNumber,'001234',label);
+});
+test('split labels retain leading zeros and explicitly marked short folios',()=>{
+ for(const label of ['NUMERO DE BOLETA\n001234','BOLETA ELECTRONICA\nN°\n001234','BOLETA\nELECTRONICA\nN.º\n001234','N°\nBOLETA\n001234','FOLIO:001234','N°\n001234'])assert.equal(parseReceiptText(label).receiptNumber,'001234',label);
+ assert.equal(parseReceiptText('BOLETA N°7').receiptNumber,'7');
+ assert.equal(parseReceiptText('BOLETA N° 1.234.567').receiptNumber,'1234567');
+});
+test('recovery excludes RUTs, dates, payment labels and conflicting receipt headings',()=>{
+ for(const label of ['BOLETA N°76.123.456-7','BOLETA N°24/10/2026','AUTORIZACION\nN°123456','RUT\nN°123456','BOLETA ELECTRONICA TRANSACCION 123456','BOLETA N°123456789012345678901','BOLETA N°123\nBOLETA N°456','BOLETIN 12345','BOLETERIA 12345'])assert.equal(parseReceiptText(label).receiptNumber,'',label);
+});
 test('missing fields, impossible dates and non-integral CLP remain flagged',()=>{
  const value=parseReceiptText('RESOLUCION 15/01/2020\nFECHA 31/02/2026\nTOTAL $1.000,50\nRUT 12.345.678-9');assert.equal(value.expenseDate,'');assert.equal(value.totalAmount,'');assert.equal(value.receiptNumber,'');assert.equal(value.warnings.length,4);
 });

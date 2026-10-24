@@ -1,3 +1,4 @@
+import {receiptNumberCandidates} from './receiptNumber';
 export interface ReceiptReading {receiptNumber:string;expenseDate:string;totalAmount:string;vatAmount:string;warnings:string[]}
 const clean=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
 function money(text:string){
@@ -12,19 +13,9 @@ function money(text:string){
 export function parseReceiptText(text:string):ReceiptReading{
  const lines=clean(text).split(/\r?\n/).map(line=>line.trim().replace(/^[*|=•·\s]+|[*|=•·\s]+$/g,'')).filter(Boolean).slice(0,1000);
  const result:ReceiptReading={receiptNumber:'',expenseDate:'',totalAmount:'',vatAmount:'',warnings:[]};
- const numbers=new Set<string>(),dates=new Set<string>(),totals=new Set<string>(),vats=new Set<string>();
+ const numbers=receiptNumberCandidates(lines),dates=new Set<string>(),totals=new Set<string>(),vats=new Set<string>();
  for(let i=0;i<lines.length;i++){
   const line=lines[i],next=lines[i+1]??'';
-  if(/BOLETA|FOLIO/.test(line)&&!/(RUT|RESOLUCION|AUTORIZACION)/.test(line)){
-   const explicit=line.match(/\b(?:FOLIO|N(?:RO|UMERO|O)?)[°.º:]*\s*[:#-]?\s*(\d{1,20})(?![\d.-])/);
-   if(explicit)numbers.add(explicit[1]);
-   else if(/^BOLETA[.\s:-]+(?:ELECTRONICA[.\s:-]+)?\d{3,20}$/.test(line))numbers.add(line.match(/\d+$/)![0]);
-   else if(/^(?:N(?:RO|UMERO|O)?[°.º:]*\s*)?\d{1,20}$/.test(next))numbers.add(next.replace(/\D/g,''));
-   else if(/^BOLETA[.\s:]*$/.test(line)&&/^ELECTRONICA[.\s:]*$/.test(next)){
-    const folio=lines[i+2]??'';if(/^(?:N(?:RO|O)?[°.º:]*\s*)?\d{3,20}$/.test(folio))numbers.add(folio.replace(/\D/g,''));
-   }
-  }
-  if(/^(?:FOLIO|N(?:RO|UMERO|O)?)[°.º:]*\s*[:#-]?\s*\d{1,20}$/.test(line))numbers.add(line.replace(/\D/g,''));
   if(!/VENCIMIENTO|RESOLUCION|AUTORIZACION/.test(line)){
    const candidates=[...line.matchAll(/\b(\d{1,2})\s*[\/.-]\s*(\d{1,2})\s*[\/.-]\s*(20\d{2})\b/g)];
    const iso=[...line.matchAll(/\b(20\d{2})\s*[\/.-]\s*(\d{1,2})\s*[\/.-]\s*(\d{1,2})\b/g)];
