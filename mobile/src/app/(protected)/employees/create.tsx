@@ -1,3 +1,4 @@
+import FormScrollView from '@/components/common/FormScrollView';
 import { useState } from 'react';
 import { Redirect, router } from 'expo-router';
 import { Pressable,ScrollView, Text, View } from 'react-native';
@@ -48,7 +49,7 @@ export default function CreateEmployeeScreen() {
 
   return (
     <AppContainer>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: Spacing.md, paddingBottom: 32,width:'100%',maxWidth:560,alignSelf:'center' }}>
+      <FormScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: Spacing.md, paddingBottom: 32,width:'100%',maxWidth:560,alignSelf:'center' }}>
         <Text style={{ fontSize: 28, color: Colors.text, fontWeight: '700' }}>Registrar integrante</Text>
         {success ? (
           <View style={{ gap: Spacing.lg }}>
@@ -75,7 +76,7 @@ export default function CreateEmployeeScreen() {
             <Button title="Volver" onPress={() => router.back()} disabled={saving} />
           </>
         )}
-      </ScrollView>
+      </FormScrollView>
     </AppContainer>
   );
 }

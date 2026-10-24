@@ -1,5 +1,8 @@
 export async function requestJson(url: string, options: RequestInit = {}, timeoutMs = 30000) {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  else options.signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
@@ -13,8 +16,11 @@ export async function requestJson(url: string, options: RequestInit = {}, timeou
     }
     return result;
   } catch (error) {
-    if (controller.signal.aborted) throw new Error('La operación tardó demasiado. Revisa tus boletas antes de volver a enviar para evitar duplicados.');
-    if (error instanceof TypeError) throw new Error('No fue posible conectar con el servidor. Comprueba tu conexión.');
+    if (controller.signal.aborted) throw new Error((options.method??'GET').toUpperCase()==='GET'
+      ? 'La consulta tardó demasiado. Puedes volver a intentarlo.'
+      : 'La operación tardó demasiado. Revisa tus boletas antes de volver a enviar para evitar duplicados.');
+    if (error instanceof TypeError || (error instanceof Error && /UnknownHostException|Unable to resolve host|Network request failed|fetch failed/i.test(error.message)))
+      throw new Error('No fue posible conectar con el servidor. Comprueba tu conexión. Si el problema continúa, la dirección del servidor de pruebas puede haber dejado de estar disponible.');
     throw error;
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); options.signal?.removeEventListener('abort', abort); }
 }

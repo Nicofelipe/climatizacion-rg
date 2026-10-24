@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { requestJson } from './http';
+import {uploadImageBlob} from '@/utils/uploadImage';
 
 export interface Expense {
     UserId: number;
@@ -52,10 +53,11 @@ interface ExpenseListResponse {
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export async function getExpensesApi(
-    token: string
+    token: string, signal?: AbortSignal
 ): Promise<Expense[]> {
     const result: ExpenseListResponse = await requestJson(`${API_URL}/expenses`, {
         method: 'GET',
+        signal,
         headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -73,6 +75,7 @@ export interface CreateExpenseRequest {
     totalAmount: number;
     description?: string | null;
     imageUri?: string | null;
+    imageMimeType?: string | null;
 }
 
 interface CreateExpenseResponse {
@@ -135,21 +138,16 @@ export async function createExpenseApi(
             const extension =
                 fileName.split('.').pop()?.toLowerCase() ?? 'jpg';
 
-            const mimeType =
+            const extensionMime =
                 extension === 'png'
                     ? 'image/png'
                     : extension === 'webp'
                         ? 'image/webp'
-                        : 'image/jpeg';
+                        : extension==='heic'?'image/heic':extension==='heif'?'image/heif':extension==='gif'?'image/gif':'image/jpeg';
+            const mimeType=data.imageMimeType||extensionMime;
 
-            formData.append(
-                'image',
-                {
-                    uri: data.imageUri,
-                    name: fileName,
-                    type: mimeType,
-                } as any
-            );
+            const blob=await uploadImageBlob(data.imageUri,mimeType);
+            formData.append('image',blob,fileName);
         }
     }
 

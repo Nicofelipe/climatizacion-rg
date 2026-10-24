@@ -41,7 +41,7 @@ export default function StorageScreen() {
       if (action === 'connect') {
         const result = await requestJson(`${base}/google-drive/connect`, { headers });
         setAuthorizationUrl(result.authorizationUrl);
-        setMessage('Pulsa Autorizar en Google y completa el acceso. Después vuelve aquí y pulsa Verificar conexión.');
+        setMessage('Pulsa Autorizar en Google y completa el acceso. Después vuelve aquí y pulsa Comprobar acceso a la carpeta.');
       } else {
         await requestJson(`${base}/google-drive/test`, { headers });
         setMessage('Conexión correcta. Ya puedes volver al formulario y guardar tu boleta.');
@@ -53,15 +53,17 @@ export default function StorageScreen() {
   return (
     <AppContainer>
       <RefreshableScrollView refreshing={loading||busy} onRefresh={()=>setAttempt(value=>value+1)} contentContainerStyle={{ gap: Spacing.lg }} keyboardShouldPersistTaps="handled">
-        <Text style={{ fontSize: 28, fontWeight: '700', color: Colors.text }}>Google Drive</Text>
+        <Text style={{ fontSize: 26, fontWeight: '700', color: Colors.text }}>Respaldo de boletas en Drive</Text>
+        <Text style={{ color: Colors.textSecondary }}>Esta pantalla es solo para administrar el acceso al respaldo de toda la empresa. Los trabajadores no tienen que conectar su cuenta personal.</Text>
         <Text style={{ color: Colors.textSecondary }}>La carpeta de respaldo de tu empresa está fijada por configuración técnica. Renovar el acceso de Google no cambia la carpeta ni mueve tus respaldos.</Text>
         <Text style={{ color: Colors.text, fontWeight: '600' }}>{loading ? 'Consultando carpeta asignada…' : folderId ? 'Carpeta asignada · cambios bloqueados' : 'Sin carpeta asignada. Contacta al responsable técnico.'}</Text>
         {folderId ? <Text selectable style={{ color: Colors.textSecondary }}>Identificador: {folderId}</Text> : null}
-        <Button title="Preparar reconexión de Drive" onPress={() => run('connect')} disabled={busy || loading || !folderId} />
+        <Text style={{color:Colors.textSecondary,fontSize:13,lineHeight:21}}>Si las fotos se guardan correctamente, no necesitas renovar nada. Primero comprueba la conexión. Solo si el acceso venció, renuévalo e inicia sesión en Google con la cuenta dueña del respaldo.</Text>
+        <Button title={busy?'Comprobando…':'Comprobar acceso a la carpeta'} onPress={() => run('test')} disabled={busy || loading || !folderId} />
+        <Button title="Renovar permiso de Google" onPress={() => run('connect')} disabled={busy || loading || !folderId} />
         {authorizationUrl ? <Button title="Autorizar en Google" onPress={() => {
           Linking.openURL(authorizationUrl).catch(() => setMessage('No fue posible abrir Google. Inténtalo nuevamente.'));
         }} /> : null}
-        <Button title="Verificar conexión" onPress={() => run('test')} disabled={busy || loading || !folderId} />
         {message ? <Text accessibilityRole="alert" style={{ color: Colors.text }}>{message}</Text> : null}
         <Button title="Volver" onPress={() => router.back()} />
       </RefreshableScrollView>

@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { validExpenseFields } from '../utils/expenseInput';
+import {receiptSubmissionError} from '../utils/receiptSubmission';
 import { lockExpenseOperation } from '../services/expenseOperationLock.service';
 import { autoApproveSoleAdmin } from '../services/approvalPolicy.service';
 import fs from 'fs/promises';
@@ -94,6 +95,9 @@ export async function createExpenseController(
 
         const description =
             req.body.description || null;
+
+        const submissionError=receiptSubmissionError(expenseDate);
+        if(submissionError){res.status(400).json({message:submissionError});return;}
 
         if (
             !Number.isInteger(expenseTypeId) ||
@@ -524,6 +528,11 @@ export async function updateExpenseController(
         originalExpenseForRollback =
             originalExpense;
 
+        if (originalExpense.UserId !== req.user.userId) {
+            res.status(403).json({message:'Solo puedes editar tus propias boletas pendientes. Las de otros integrantes se aprueban o rechazan sin modificar sus datos.'});
+            return;
+        }
+
         /*
          * Todos los roles solamente pueden editar
          * una boleta PENDING.
@@ -537,6 +546,9 @@ export async function updateExpenseController(
             });
             return;
         }
+
+        const submissionError=receiptSubmissionError(expenseDate);
+        if(submissionError){res.status(400).json({message:submissionError});return;}
 
         const currentFile =
             await getExpenseFile(

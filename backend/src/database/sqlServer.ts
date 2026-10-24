@@ -1,4 +1,5 @@
 import msnodesqlv8 from 'msnodesqlv8';
+import {performanceDiagnostics,requestTiming} from '../middlewares/performance.middleware';
 
 const connectionString =
   'Driver={ODBC Driver 18 for SQL Server};' +
@@ -19,11 +20,16 @@ export function executeQuery<T>(
   params: QueryParam[] = []
 ): Promise<T[]> {
   return new Promise((resolve, reject) => {
+    const started=Date.now(),id=requestTiming.getStore()?.id;
+    const timer=performanceDiagnostics?setTimeout(()=>console.log('[sql-perf]',JSON.stringify({id,state:'waiting',ms:Date.now()-started})),5000):null;
+    timer?.unref();
     msnodesqlv8.query(
       connectionString,
       sql,
       params as any,
       (error, rows) => {
+        if(timer)clearTimeout(timer);
+        if(performanceDiagnostics)console.log('[sql-perf]',JSON.stringify({id,state:error?'error':'finished',ms:Date.now()-started}));
         if (error) {
           reject(error);
           return;

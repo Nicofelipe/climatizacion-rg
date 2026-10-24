@@ -12,10 +12,11 @@ INSERT INTO #AppUser VALUES(5,3,1,1),(6,3,2,1),(7,4,1,1);
 INSERT INTO #Expense VALUES(11,3,'2026-10-05',1190,1000,190,N'APPROVED',0,0,NULL);
 `;
 const path=require.resolve('../src/database/sqlServer.ts');
+let receiptStatus='APPROVED';
 require.cache[path]={id:path,filename:path,loaded:true,exports:{executeQuery:(statement,params)=>new Promise((resolve,reject)=>{
  let isolated=statement.replaceAll('dbo.Expense','#Expense').replaceAll('dbo.AppUser','#AppUser').replaceAll('dbo.Role','#Role').replaceAll('dbo.AuditLog','#AuditLog');
  isolated=isolated.replace('SELECT ? AS Id;',`SELECT ? AS Id,e.Status,e.DriveSyncPending,a.UserId,a.Reason,a.BeforeData,a.AfterData FROM #Expense e JOIN #AuditLog a ON a.EntityId=e.Id;`);
- driver.query(cs,fixture+isolated,params,(err,rows)=>err?reject(err):resolve(rows));
+ driver.query(cs,fixture+`UPDATE #Expense SET Status=N'${receiptStatus}';`+isolated,params,(err,rows)=>err?reject(err):resolve(rows));
 })}};
 const drivePath=require.resolve('../src/services/googleDrive.service.ts');require.cache[drivePath]={id:drivePath,filename:drivePath,loaded:true,exports:{moveExpenseFileInGoogleDrive:async()=>{}}};
 const {correctExpense}=require('../src/services/expenseCorrection.service.ts');
@@ -30,3 +31,6 @@ for(const [name,change,pattern] of [
  ['cross-company receipt hidden',{companyId:4,userId:7},/CORRECTION_CONFLICT/],['stale values conflict',{expectedAmount:99},/CORRECTION_CONFLICT/],
  ['unchanged rejected',{expenseDate:'2026-10-05',totalAmount:1190},/CORRECTION_UNCHANGED/]
 ])test(name,async()=>assert.rejects(correctExpense({...input,...change}),pattern));
+for(const status of ['PENDING','REJECTED'])test(`administrator cannot correct ${status} receipt`,async()=>{
+ receiptStatus=status;try{await assert.rejects(correctExpense(input),/CORRECTION_CONFLICT/);}finally{receiptStatus='APPROVED';}
+});

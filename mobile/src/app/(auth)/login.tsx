@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import FormScrollView from '@/components/common/FormScrollView';
+import ClepitBrand from '@/components/common/ClepitBrand';
+import { useEffect,useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {Ionicons} from '@expo/vector-icons';
 
 import { Redirect, router } from 'expo-router';
 import { Pressable,ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -13,6 +17,8 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberEmail,setRememberEmail]=useState(false);
+  useEffect(()=>{void AsyncStorage.getItem('remembered-login-email').then(value=>{if(value){setEmail(value);setRememberEmail(true);}}).catch(()=>{});},[]);
   const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated) return <Redirect href="/(protected)/(tabs)" />;
@@ -25,6 +31,8 @@ export default function LoginScreen() {
         email: email.trim().toLowerCase(),
         password,
       });
+      if(rememberEmail)await AsyncStorage.setItem('remembered-login-email',email.trim().toLowerCase()).catch(()=>{});
+      else await AsyncStorage.removeItem('remembered-login-email').catch(()=>{});
 
       router.replace('/(protected)/(tabs)');
     } catch (error) {
@@ -38,12 +46,10 @@ export default function LoginScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <FormScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
         <Text style={styles.eyebrow}>GESTIÓN DE BOLETAS</Text>
-        <Text style={styles.title}>
-          Climatización RG
-        </Text>
+        <ClepitBrand width={240}/>
 
         <Text style={styles.subtitle}>
           Tus gastos y respaldos, en un solo lugar.
@@ -68,6 +74,7 @@ export default function LoginScreen() {
             secureTextEntry
           />
 
+          <Pressable accessibilityRole="checkbox" accessibilityState={{checked:rememberEmail}} onPress={()=>{setRememberEmail(value=>!value);if(rememberEmail)void AsyncStorage.removeItem('remembered-login-email');}} style={{flexDirection:'row',alignItems:'center',gap:9,paddingVertical:8}}><Ionicons name={rememberEmail?'checkbox':'square-outline'} size={23} color={Colors.primary}/><Text style={{color:Colors.text}}>Recordar mi correo</Text></Pressable>
           <Button
             title="Iniciar sesión"
             onPress={handleLogin}
@@ -81,7 +88,7 @@ export default function LoginScreen() {
           <Text style={styles.help}>¿No tienes acceso? Solicita al encargado que registre tu correo y te entregue tu contraseña por un canal privado.</Text>
         </View>
       </View>
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

@@ -6,4 +6,5 @@ export interface ButtonProps {
 
   loading?: boolean;
   disabled?: boolean;
+  selected?: boolean;
 }

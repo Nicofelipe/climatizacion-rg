@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const sql = require('msnodesqlv8');
 const cs = 'Driver={ODBC Driver 18 for SQL Server};Server=' + process.env.DB_SERVER +
   ';Database=' + process.env.DB_DATABASE + ';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
-const fixture = `SET NOCOUNT ON;
+const fixture = require('./fixtures/notificationTable.cjs')+`SET NOCOUNT ON;
   CREATE TABLE #Role (Id int, Name nvarchar(20), IsActive bit);
   CREATE TABLE #AppUser (Id int, CompanyId int, RoleId int, IsActive bit);
   CREATE TABLE #Expense (Id int, CompanyId int, Status nvarchar(20), IsDeleted bit, UserId int DEFAULT 6,
@@ -21,7 +21,7 @@ let ownReceipt=false,multipleAdmins=false,syncPending=false;
 const file = require.resolve('../src/database/sqlServer.ts');
 require.cache[file] = { id: file, filename: file, loaded: true, exports: {
   executeQuery: async (statement, params) => {
-    const isolated = statement.replaceAll('dbo.Expense', '#Expense').replaceAll('dbo.AppUser', '#AppUser')
+    const isolated = statement.replaceAll('dbo.UserNotification','#UserNotification').replaceAll('dbo.Expense', '#Expense').replaceAll('dbo.AppUser', '#AppUser')
       .replaceAll('dbo.Role', '#Role').replaceAll('dbo.AuditLog', '#AuditLog')
       .replace('SELECT Id FROM @Changed ORDER BY Id;', `SELECT c.Id,e.Status,e.RejectionReason,e.ReviewedByUserId,
         (SELECT COUNT(*) FROM #AuditLog) AS AuditCount FROM @Changed c JOIN #Expense e ON e.Id=c.Id ORDER BY c.Id;`);

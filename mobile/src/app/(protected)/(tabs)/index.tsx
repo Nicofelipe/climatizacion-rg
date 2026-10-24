@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Image,Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+
 import styles, { dashboardPalette } from '@/components/common/DashboardOverview.styles';
 import ExpenseStatus from '@/components/common/ExpenseStatus';
 import DashboardPeriodSelector from '@/components/common/DashboardPeriodSelector';
@@ -36,12 +36,12 @@ export default function Dashboard() {
   const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase();
   const maxTrend = Math.max(1, ...(data?.trend.map(item => item.amount) ?? []));
   const goExpenses = () => router.push({pathname:'/(protected)/(tabs)/expenses',params:{view:companyView?'company':'personal',workerId:undefined}});
-  return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
+  return <View style={styles.page}>
     <RefreshableScrollView contentContainerStyle={styles.content} refreshing={loading} onRefresh={reload}>
       <View style={styles.row}>
         <View style={styles.brand}>
-          <View style={styles.brandIcon}><Ionicons name="business-outline" size={21} color="#0F8277" /></View>
-          <View style={{ flexShrink: 1 }}><Text style={styles.overline}>MI ESPACIO DE TRABAJO</Text><Text style={styles.company}>{data?.companyName ?? 'Tu empresa'}</Text></View>
+          <View style={styles.brandIcon}><Image source={require('../../../../assets/images/clipit-icon.png')} style={{width:46,height:46}} resizeMode="contain" accessibilityLabel="Clepit"/></View>
+          <View style={{ flexShrink: 1 }}><Text style={styles.overline}>CLEPIT · MI ESPACIO DE TRABAJO</Text><Text style={styles.company}>{data?.companyName ?? 'Tu empresa'}</Text></View>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Abrir mi perfil" style={styles.avatar} onPress={() => router.push('/(protected)/(tabs)/profile')}><Text style={styles.avatarText}>{initials}</Text></Pressable>
       </View>
@@ -133,5 +133,5 @@ export default function Dashboard() {
         <Text style={styles.footnote}>Montos en CLP · {data.scope === 'company' ? 'Resumen de tu empresa' : 'Resumen de tus propias boletas'}{ '\n' }Actualizado a las {new Date(data.generatedAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}</Text>
       </> : null}
     </RefreshableScrollView>
-  </SafeAreaView>;
+  </View>;
 }

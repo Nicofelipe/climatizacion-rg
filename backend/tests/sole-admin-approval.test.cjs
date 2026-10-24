@@ -2,7 +2,7 @@ require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8');
 const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
 let secondAdmin=false,hasImage=true,owner=5,secondActive=1,saved;
-const fixture=()=>`SET NOCOUNT ON;
+const fixture=()=>require('./fixtures/notificationTable.cjs')+`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);
 CREATE TABLE #AppUser(Id int,CompanyId int,RoleId int,IsActive bit);
 CREATE TABLE #Expense(Id int,CompanyId int,UserId int,Status nvarchar(20),IsDeleted bit,ReviewedByUserId int,ReviewedAt datetime2,UpdatedAt datetime2,DriveSyncPending bit);
@@ -15,7 +15,7 @@ ${secondAdmin?`INSERT INTO #AppUser VALUES(8,3,1,${secondActive});`:''}
 ${hasImage?`INSERT INTO #File VALUES(3,11,N'EXPENSE');`:''}
 `;
 const db=require.resolve('../src/database/sqlServer.ts');require.cache[db]={id:db,filename:db,loaded:true,exports:{executeQuery:(sql,params)=>new Promise((resolve,reject)=>{
-  let statement=sql.replaceAll('dbo.AppUser','#AppUser').replaceAll('dbo.Role','#Role').replaceAll('dbo.Expense','#Expense').replaceAll('dbo.[File]','#File').replaceAll('dbo.AuditLog','#AuditLog');
+  let statement=sql.replaceAll('dbo.UserNotification','#UserNotification').replaceAll('dbo.AppUser','#AppUser').replaceAll('dbo.Role','#Role').replaceAll('dbo.Expense','#Expense').replaceAll('dbo.[File]','#File').replaceAll('dbo.AuditLog','#AuditLog');
   statement=statement.replace('SELECT Id FROM @Changed;',`SELECT c.Id,a.Action,a.Reason,e.Status,e.ReviewedByUserId FROM @Changed c JOIN #Expense e ON e.Id=c.Id JOIN #AuditLog a ON a.EntityId=c.Id;`);
   driver.query(cs,fixture()+statement,params,(err,rows)=>{if(err)return reject(err);saved=rows;resolve(rows);});
 })}};

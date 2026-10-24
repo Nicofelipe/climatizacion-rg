@@ -7,8 +7,17 @@ async function validateSupplier(companyId:number,supplierId?:number|null){
 }
 
 export async function finishExpenseSync(companyId:number,expenseId:number){
-  await executeQuery(`UPDATE dbo.Expense SET DriveSyncPending=0 WHERE Id=? AND CompanyId=? AND IsDeleted=0 AND Status=N'PENDING'
-    AND EXISTS(SELECT 1 FROM dbo.[File] f WHERE f.CompanyId=dbo.Expense.CompanyId AND f.EntityId=dbo.Expense.Id AND f.EntityType=N'EXPENSE');`,[expenseId,companyId]);
+  await executeQuery(`SET XACT_ABORT ON; BEGIN TRY BEGIN TRANSACTION;
+    DECLARE @Expense int=?,@Company int=?;
+    UPDATE dbo.Expense SET DriveSyncPending=0 WHERE Id=@Expense AND CompanyId=@Company AND IsDeleted=0 AND Status=N'PENDING'
+    AND EXISTS(SELECT 1 FROM dbo.[File] f WHERE f.CompanyId=dbo.Expense.CompanyId AND f.EntityId=dbo.Expense.Id AND f.EntityType=N'EXPENSE');
+    IF @@ROWCOUNT<>1 THROW 50091,'EXPENSE_SYNC_CONFLICT',1;
+    INSERT INTO dbo.UserNotification(CompanyId,UserId,ExpenseId,Kind,EventKey)
+      SELECT @Company,u.Id,e.Id,N'PENDING_REVIEW',CONCAT(N'CREATED:',e.Id) FROM dbo.AppUser u JOIN dbo.Role r ON r.Id=u.RoleId
+      JOIN dbo.Expense e ON e.CompanyId=u.CompanyId AND e.Id=@Expense
+      WHERE u.CompanyId=@Company AND u.IsActive=1 AND r.IsActive=1 AND r.Name=N'ADMIN' AND u.Id<>e.UserId
+       AND NOT EXISTS(SELECT 1 FROM dbo.UserNotification WITH(UPDLOCK,HOLDLOCK) WHERE CompanyId=@Company AND UserId=u.Id AND EventKey=CONCAT(N'CREATED:',e.Id));
+    COMMIT TRANSACTION; END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK TRANSACTION; THROW; END CATCH;`,[expenseId,companyId]);
 }
 
 interface CreateExpenseInput {
@@ -397,9 +406,6 @@ export async function updateExpense(
     const vatAmount =
         input.totalAmount - netAmount;
 
-    const isAdmin =
-        input.role === 'ADMIN';
-
     const rows =
         await executeQuery<ExpenseListRow>(
             `
@@ -427,10 +433,7 @@ export async function updateExpense(
               AND IsDeleted = 0
               AND Status = N'PENDING'
               AND DriveSyncPending = 0
-              AND (
-                    ? = 1
-                    OR UserId = ?
-                  );
+              AND UserId = ?;
             IF @@ROWCOUNT>0 BEGIN
               SET @ChangedId=?;
               SELECT @After=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status,ExpenseTypeId,SupplierId,ReceiptNumber,Description
@@ -461,7 +464,6 @@ export async function updateExpense(
                 input.expenseId,
                 input.companyId,
 
-                isAdmin ? 1 : 0,
                 input.userId,
                 input.expenseId,input.companyId,input.userId,
             ]
@@ -490,13 +492,13 @@ export async function deleteExpense(
         AND IsDeleted = 0
         AND Status = N'PENDING'
         AND DriveSyncPending = 0
-        AND (? = 1 OR UserId = ?);
+        AND UserId = ?;
       INSERT INTO dbo.AuditLog(CompanyId,UserId,Action,Entity,EntityId,Reason,CreatedAt)
         SELECT ?,?,N'SOFT_DELETE_EXPENSE',N'EXPENSE',Id,N'Boleta pendiente retirada del listado; registro e imagen conservados.',SYSUTCDATETIME() FROM @Deleted;
       COMMIT TRANSACTION; SELECT Id FROM @Deleted;
       END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK TRANSACTION; THROW; END CATCH;
     `,
-    [expenseId, companyId, role === 'ADMIN' ? 1 : 0, userId,companyId,userId]
+    [expenseId, companyId, userId,companyId,userId]
   );
 
   return rows[0] ?? null;

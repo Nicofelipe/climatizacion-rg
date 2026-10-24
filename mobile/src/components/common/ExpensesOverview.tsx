@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import ExpenseStatus from './ExpenseStatus';
 import ExpenseScopeSelector from './ExpenseScopeSelector';
 import ReceiptDateFilter from './ReceiptDateFilter';
@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Colors } from '@/theme';
 import { formatCurrency } from '@/utils/currency';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const filters = [
   { value: 'ALL', label: 'Todas' }, { value: 'PENDING', label: 'Pendientes' },
@@ -39,6 +40,10 @@ export default function ExpensesOverview() {
   const [from,setFrom]=useState('');const [to,setTo]=useState('');
   const [adminCount,setAdminCount]=useState<number|null>(null);
   const [reviewOnly,setReviewOnly]=useState(false);
+  const [seen,setSeen]=useState<Set<number>>(new Set());
+  const seenKey=`seen-receipts:${user?.companyId}:${user?.id}`;
+  useFocusEffect(useCallback(()=>{let active=true;void AsyncStorage.getItem(seenKey).then(value=>{if(active){const ids=value?JSON.parse(value):[];setSeen(new Set(Array.isArray(ids)?ids.filter(id=>Number.isSafeInteger(id)&&id>0):[]));}}).catch(()=>{});return()=>{active=false;};},[seenKey]));
+  function openExpense(id:number){const next=new Set(seen);next.add(id);setSeen(next);void AsyncStorage.setItem(seenKey,JSON.stringify([...next].slice(-2000))).catch(()=>{});router.push({pathname:'/(protected)/expenses/[id]',params:{id}});}
   useEffect(()=>{if(params.workerId){setWorker(params.workerId);setScope('company');}},[params.workerId]);
   useEffect(()=>{if(params.view==='company'||params.view==='personal'){setScope(params.view);setWorker('');}},[params.view]);
   useEffect(()=>{if(params.review){setScope('company');setWorker('');setStatus('PENDING');setSearch('');setFrom('');setTo('');setReviewOnly(true);}},[params.review]);
@@ -59,7 +64,7 @@ export default function ExpensesOverview() {
   const pending = scoped.filter(item => item.Status === 'PENDING').length;
   const approved = scoped.filter(item => item.Status === 'APPROVED').length;
 
-  return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
+  return <View style={styles.page}>
     <FlatList {...handlers} scrollEventThrottle={16} alwaysBounceVertical data={visible} keyExtractor={item => String(item.Id)} refreshing={isLoading} onRefresh={refresh}
       contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
       ListHeaderComponent={<View style={{ gap: 22, marginBottom: 16 }}>
@@ -91,25 +96,25 @@ export default function ExpensesOverview() {
       ListEmptyComponent={isLoading ? <ActivityIndicator color={Colors.primary} style={{ padding: 30 }} /> : !error ? <View style={styles.empty}>
         <Ionicons name="documents-outline" size={42} color="#94A3B8" /><Text style={styles.emptyTitle}>{expenses.length ? 'No hay coincidencias' : 'Tu registro comienza aquí'}</Text><Text style={styles.emptyText}>{expenses.length ? 'Prueba otro número, tipo de gasto o estado.' : 'Agrega tu primera boleta y conserva el respaldo desde el primer día.'}</Text>
       </View> : null}
-      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`Ver boleta ${item.ReceiptNumber}`} onPress={() => router.push({ pathname: '/(protected)/expenses/[id]', params: { id: item.Id } })} style={styles.card}>
+      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`Ver boleta ${item.ReceiptNumber}${item.Status==='PENDING'&&!seen.has(item.Id)?', pendiente nueva':''}`} onPress={() => openExpense(item.Id)} style={styles.card}>
         <View style={styles.row}>
           <View style={styles.typeIcon}><Ionicons name={typeIcon(item.ExpenseTypeName)} size={23} color={Colors.primary} /></View>
           <View style={{ flex: 1, gap: 5 }}><Text style={styles.type} numberOfLines={1}>{item.ExpenseTypeName}</Text><Text style={styles.receiptNumber} numberOfLines={1}>N.º {item.ReceiptNumber}</Text></View>
-          <ExpenseStatus status={item.Status} />
+          {item.Status==='PENDING'&&!seen.has(item.Id)?<View accessibilityLabel="Pendiente nueva, sin abrir" style={{width:10,height:10,borderRadius:5,backgroundColor:'#DC2626'}}/>:null}<ExpenseStatus status={item.Status} />
         </View>
         {item.Description ? <Text numberOfLines={1} style={styles.description}>{item.Description}</Text> : null}
         {user?.role==='ADMIN'?<Text style={styles.description}>{item.UserId===user.id?'Mi boleta':item.UserName}</Text>:null}
         <View style={styles.cardFooter}><View style={styles.date}><Ionicons name="calendar-outline" size={14} color={Colors.textSecondary} /><Text style={styles.dateText}>{item.ExpenseDate.slice(0, 10).split('-').reverse().join('/')}</Text></View><View style={styles.date}><Text style={styles.amount}>{formatCurrency(item.TotalAmount)}</Text><Ionicons name="chevron-forward" size={18} color={Colors.primary} /></View></View>
       </Pressable>} />
     <Modal visible={choosingWorker} transparent animationType="fade" onRequestClose={()=>setChoosingWorker(false)}><View style={{flex:1,backgroundColor:'#17233D88',justifyContent:'center',padding:22}}><View style={{backgroundColor:'white',borderRadius:22,padding:22,gap:16,maxHeight:'80%'}}><Text style={styles.emptyTitle}>Filtrar por integrante</Text><ScrollView><Pressable accessibilityRole="button" onPress={()=>{setWorker('');setChoosingWorker(false);}} style={{padding:15}}><Text style={styles.link}>Todos los integrantes</Text></Pressable>{people.map(person=><Pressable key={person.Id} accessibilityRole="button" onPress={()=>{setWorker(String(person.Id));setChoosingWorker(false);}} style={{padding:15}}><Text style={styles.filterText}>{person.FirstName} {person.LastName}{person.Id===user?.id?' · Yo':''}</Text></Pressable>)}</ScrollView><Pressable accessibilityRole="button" onPress={()=>setChoosingWorker(false)}><Text style={styles.link}>Cerrar</Text></Pressable></View></View></Modal>
-  </SafeAreaView>;
+  </View>;
 }
 
 const styles = StyleSheet.create({
   filterPanel:{backgroundColor:'#EDF3F7',padding:16,borderRadius:18,gap:13,borderWidth:1,borderColor:Colors.border},
   filterHeading:{fontSize:14,fontWeight:'700',color:Colors.text},
   page: { flex: 1, backgroundColor: Colors.background },
-  content: { width: '100%', maxWidth: 900, alignSelf: 'center', padding: 20, paddingBottom: 36 },
+  content: { width: '100%', maxWidth: 900, alignSelf: 'center', padding: 20, paddingBottom: 105 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   eyebrow: { fontSize: 10, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 1.7, marginBottom: 9 },
   title: { color: Colors.text, fontSize: 30, fontWeight: '800', letterSpacing: -1 },

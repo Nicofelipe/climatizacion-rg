@@ -12,8 +12,8 @@ export interface DashboardData {
   recent: { id: number; receiptNumber: string; date: string; type: string; total: number; status: string }[];
 }
 export class DashboardService {
-  static async getDashboard(token: string, month: string, mode: 'month' | 'year' = 'month', scope: 'personal' | 'company' = 'company'): Promise<DashboardData> {
+  static async getDashboard(token: string, month: string, mode: 'month' | 'year' = 'month', scope: 'personal' | 'company' = 'company', signal?: AbortSignal): Promise<DashboardData> {
     return requestJson(`${process.env.EXPO_PUBLIC_API_URL}/dashboard?month=${encodeURIComponent(month)}&mode=${mode}&scope=${scope}`,
-      { headers: { Authorization: `Bearer ${token}` } });
+      { headers: { Authorization: `Bearer ${token}` }, signal });
   }
 }

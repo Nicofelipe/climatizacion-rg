@@ -1,3 +1,7 @@
+import FormScrollView from '@/components/common/FormScrollView';
+import ReceiptDateFilter from '@/components/common/ReceiptDateFilter';
+import { validReceiptDate,todayReceiptDate } from '@/utils/receiptDate';
+import {receiptSubmissionError} from '@/utils/receiptSubmission';
 import AppContainer from '@/components/layout/AppContainer';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -20,9 +24,11 @@ import {
 } from 'react-native';
 
 export default function CreateExpenseScreen() {
-    const { token } = useAuth();
+    const { token,user } = useAuth();
     const { editId } = useLocalSearchParams<{ editId?: string }>();
     const isEditing = Boolean(editId);
+    const receiptToday=todayReceiptDate();
+    const firstReceiptDate=`${Number(receiptToday.slice(0,4))-(receiptToday.slice(5)<='03-15'?1:0)}-01-01`;
 
     const [receiptNumber, setReceiptNumber] = useState('');
     const [expenseDate, setExpenseDate] = useState('');
@@ -30,6 +36,7 @@ export default function CreateExpenseScreen() {
     const [totalAmount, setTotalAmount] = useState('');
     const [description, setDescription] = useState('');
     const [imageUri, setImageUri] = useState<string | null>(null);
+    const [imageMimeType,setImageMimeType]=useState<string|null>(null);
     const [showImageOptions, setShowImageOptions] = useState(false);
     const [imageError, setImageError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -56,6 +63,7 @@ export default function CreateExpenseScreen() {
                 setSubmitError('Esta boleta ya no está pendiente y no se puede modificar.');
                 return;
             }
+            if(expense.UserId!==user?.id){setSubmitError('Solo puedes editar tus propias boletas pendientes.');return;}
             setReceiptNumber(expense.ReceiptNumber);
             setExpenseDate(expense.ExpenseDate.slice(0, 10));
             setExpenseTypeId(expense.ExpenseTypeId);
@@ -68,7 +76,7 @@ export default function CreateExpenseScreen() {
             if (active) setSubmitError(err instanceof Error ? err.message : 'No fue posible cargar la boleta.');
         }).finally(() => { if (active) setLoadingExisting(false); });
         return () => { active = false; };
-    }, [editId, token]);
+    }, [editId, token,user?.id]);
 
     useEffect(() => {
         if (!editId || !token || !hasExistingImage) return;
@@ -88,6 +96,7 @@ export default function CreateExpenseScreen() {
     function removeSelectedImage() {
         if (imageUri) {
             setImageUri(null);
+            setImageMimeType(null);
         } else if (hasExistingImage) {
             setRemoveExistingImage(true);
         }
@@ -112,6 +121,7 @@ export default function CreateExpenseScreen() {
 
         if (!result.canceled) {
             setImageUri(result.assets[0].uri);
+            setImageMimeType(result.assets[0].mimeType??null);
             setImageError(null);
         }
     }
@@ -134,6 +144,7 @@ export default function CreateExpenseScreen() {
 
         if (!result.canceled) {
             setImageUri(result.assets[0].uri);
+            setImageMimeType(result.assets[0].mimeType??null);
             setImageError(null);
         }
     }
@@ -157,12 +168,14 @@ export default function CreateExpenseScreen() {
         }
 
         const parsedTotalAmount = Number(totalAmount);
+        const submissionError=receiptSubmissionError(expenseDate.trim());
+        if(submissionError){setSubmitError(submissionError);return;}
         const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
         if (
             !receiptNumber.trim() ||
             !expenseDate.trim() ||
-            !datePattern.test(expenseDate.trim()) ||
+            !validReceiptDate(expenseDate.trim()) || expenseDate.trim()>todayReceiptDate() ||
             !expenseTypeId ||
             !Number.isFinite(parsedTotalAmount) ||
             parsedTotalAmount <= 0
@@ -181,6 +194,7 @@ export default function CreateExpenseScreen() {
                 totalAmount: parsedTotalAmount,
                 description: description.trim() || null,
                 imageUri,
+                imageMimeType,
             };
             if (editId) await createExpenseApi(token, data, Number(editId));
             else await createExpense(token, data);
@@ -211,7 +225,7 @@ export default function CreateExpenseScreen() {
                 {isEditing ? 'Editar boleta pendiente' : 'Registrar boleta'}
             </Text>
 
-            <ScrollView
+            <FormScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
                     paddingBottom: 40,
@@ -269,15 +283,15 @@ export default function CreateExpenseScreen() {
                         <>
                             <View
                                 style={{
-                                    width: 90,
-                                    height: 90,
-                                    borderRadius: 45,
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: 16,
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     backgroundColor: Colors.primary,
                                 }}
                             >
-                                <Text style={{ fontSize: 38 }}>
+                                <Text style={{ fontSize: 22 }}>
                                     📷
                                 </Text>
                             </View>
@@ -320,8 +334,9 @@ export default function CreateExpenseScreen() {
                     label="Fecha"
                     value={expenseDate}
                     onChangeText={setExpenseDate}
-                    placeholder="2026-08-26"
+                    placeholder="AAAA-MM-DD"
                 />
+                <View style={{marginBottom:Spacing.lg,gap:8}}><ReceiptDateFilter label="Elegir fecha en calendario" value={expenseDate} onChange={setExpenseDate} clearable={false} minDate={firstReceiptDate} maxDate={receiptToday}/><Text style={{fontSize:12,color:Colors.textSecondary}}>Puedes escribir la fecha o elegirla en el calendario. El año anterior se puede rendir hasta el 15 de marzo inclusive.</Text></View>
 
                 <Text
                     style={{
@@ -342,6 +357,7 @@ export default function CreateExpenseScreen() {
                     {expenseTypes.map((type) => (
                         <Button
                             key={type.id}
+                            selected={expenseTypeId===type.id}
                             title={
                                 expenseTypeId === type.id
                                     ? `✓ ${type.name}`
@@ -383,7 +399,7 @@ export default function CreateExpenseScreen() {
                     loading={isSaving}
                     disabled={isSaving || loadingExisting || editBlocked}
                 />}
-            </ScrollView>
+            </FormScrollView>
             <Modal
                 visible={showImageOptions}
                 transparent

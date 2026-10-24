@@ -1,22 +1,21 @@
-import { router, Tabs } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Tabs,router } from 'expo-router';
+import { Keyboard,Pressable,View } from 'react-native';
+import {useEffect,useState} from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { usePendingReviews } from '@/hooks/usePendingReviews';
 
 export default function TabsLayout() {
   const {user,token}=useAuth();
-  const {count,notice,dismiss}=usePendingReviews(token,user?.role==='ADMIN');
-  const openReviews=()=>{dismiss();router.push({pathname:'/(protected)/(tabs)/expenses',params:{review:String(Date.now()),view:'company',workerId:undefined}});};
+  const [typing,setTyping]=useState(false);
+  useEffect(()=>{const show=Keyboard.addListener('keyboardDidShow',()=>setTyping(true)),hide=Keyboard.addListener('keyboardDidHide',()=>setTyping(false));return()=>{show.remove();hide.remove();};},[]);
+  const {count}=usePendingReviews(token,user?.role==='ADMIN');
   return (
     <View style={{flex:1}}>
-    {user?.role==='ADMIN'&&notice>0?<View accessibilityLiveRegion="polite" style={{backgroundColor:'#FFF5EC',borderBottomWidth:1,borderBottomColor:'#F2D8BE',paddingHorizontal:16,paddingVertical:12,flexDirection:'row',alignItems:'center',gap:12}}>
-      <Ionicons name="notifications-outline" size={23} color="#BC5028"/>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Tienes ${count} boletas pendientes por revisar. Abrir pendientes`} onPress={openReviews} style={{flex:1,gap:4}}><Text style={{color:'#733B23',fontSize:13,fontWeight:'700'}}>{notice===1?'Hay una boleta pendiente por revisar':'Hay boletas pendientes por revisar'}</Text><Text style={{color:'#8C604B',fontSize:12}}>{count} pendiente{count!==1?'s':''} · Toca para revisarlas</Text></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Cerrar aviso de pendientes" onPress={dismiss} style={{padding:6}}><Ionicons name="close" size={20} color="#8C604B"/></Pressable>
-    </View>:null}
     <Tabs
+      safeAreaInsets={{top:0,bottom:0,left:0,right:0}}
       screenOptions={{
+        tabBarHideOnKeyboard:true,
         headerShown: false,
         tabBarActiveTintColor: '#0F8277',
         tabBarInactiveTintColor: '#7C899D',
@@ -66,6 +65,7 @@ export default function TabsLayout() {
       />
       <Tabs.Screen name="employees" options={{title:'Equipo',href:user?.role==='ADMIN'?undefined:null,tabBarIcon:({color,size})=><Ionicons name="people-outline" color={color} size={size}/>}}/>
     </Tabs>
+    {!typing?<Pressable accessibilityRole="button" accessibilityLabel="Registrar una boleta" onPress={()=>router.push('/(protected)/expenses/create')} style={{position:'absolute',right:20,bottom:83,width:58,height:58,borderRadius:29,backgroundColor:'#0F8277',alignItems:'center',justifyContent:'center',borderWidth:2,borderColor:'white',elevation:7,boxShadow:'0px 4px 12px #0F827744'}}><Ionicons name="add" size={34} color="white"/></Pressable>:null}
     </View>
   );
 }

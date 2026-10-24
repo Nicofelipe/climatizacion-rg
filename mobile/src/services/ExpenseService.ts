@@ -4,8 +4,8 @@ import {
     getExpensesApi,
 } from '@/api/expense.api';
 
-export async function getExpenses(token: string) {
-  return getExpensesApi(token);
+export async function getExpenses(token: string, signal?: AbortSignal) {
+  return getExpensesApi(token, signal);
 }
 
 export async function createExpense(

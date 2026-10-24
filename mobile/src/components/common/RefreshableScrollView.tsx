@@ -3,6 +3,8 @@ import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, Scr
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/theme';
 import { notifyDataRefresh } from '@/utils/refreshEvents';
+import FormScrollView from './FormScrollView';
+import {ChartScrollContext} from './ChartEntrance';
 
 export function useWebPullRefresh(refreshing:boolean,onRefresh:()=>void){
   const refresh=()=>{if(!refreshing){onRefresh();notifyDataRefresh();}};
@@ -21,5 +23,6 @@ export function useWebPullRefresh(refreshing:boolean,onRefresh:()=>void){
 
 export default function RefreshableScrollView({refreshing,onRefresh,children,...props}:ScrollViewProps&{refreshing:boolean;onRefresh:()=>void}){
   const {handlers,control,refresh}=useWebPullRefresh(refreshing,onRefresh);
-  return <ScrollView {...props} {...handlers} scrollEventThrottle={16} alwaysBounceVertical refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.primary}/>}>{control}{children}</ScrollView>;
+  const [offset,setOffset]=useState(0);
+  return <ChartScrollContext.Provider value={offset}><FormScrollView {...props} {...handlers} onScroll={event=>{handlers.onScroll?.(event);props.onScroll?.(event);setOffset(event.nativeEvent.contentOffset.y);}} scrollEventThrottle={80} alwaysBounceVertical refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={Colors.primary}/>}>{control}{children}</FormScrollView></ChartScrollContext.Provider>;
 }

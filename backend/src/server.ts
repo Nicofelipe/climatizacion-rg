@@ -10,7 +10,11 @@ import healthRoutes from './routes/health.routes';
 import storageRoutes from './routes/storage.routes';
 import userRoutes from './routes/user.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import notificationRoutes from './routes/notification.routes';
+import reportRoutes from './routes/report.routes';
+import {startPushWorker} from './services/pushDelivery.service';
 import { allowedWebOrigin, privateResponses, safeRequestError } from './middlewares/security.middleware';
+import {measureRequests} from './middlewares/performance.middleware';
 
 const app = express();
 
@@ -19,6 +23,7 @@ const HOST = process.env.HOST ?? '127.0.0.1';
 
 app.use(helmet());
 app.disable('x-powered-by');
+app.use(measureRequests);
 app.use(privateResponses);
 app.use(allowedWebOrigin);
 app.use(cors({origin:true}));
@@ -30,6 +35,8 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/storage', storageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/notifications',notificationRoutes);
+app.use('/api/reports',reportRoutes);
 app.use(safeRequestError);
 
 const server=app.listen(PORT, HOST, () => {
@@ -37,3 +44,4 @@ const server=app.listen(PORT, HOST, () => {
 });
 server.requestTimeout=120000;
 server.headersTimeout=20000;
+startPushWorker();

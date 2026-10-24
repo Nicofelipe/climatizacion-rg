@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import { getExpenseById } from '../services/expense.service';
 import { correctExpense, getExpenseHistory, syncCorrectedExpense } from '../services/expenseCorrection.service';
 import { lockExpenseOperation } from '../services/expenseOperationLock.service';
+import {receiptSubmissionError} from '../utils/receiptSubmission';
 
 export async function expenseHistoryController(req: AuthenticatedRequest,res: Response) {
   if (!req.user) { res.sendStatus(401); return; }
@@ -25,6 +26,7 @@ export async function correctExpenseController(req: AuthenticatedRequest,res: Re
     ||typeof body.reason!=='string'||!body.reason.trim()||body.reason.trim().length>1000) {
     res.status(400).json({message:'Revisa la fecha, el monto entero en CLP y el motivo obligatorio (máximo 1000 caracteres).'});return;
   }
+  if(body.expenseDate!==body.expectedDate){const error=receiptSubmissionError(body.expenseDate);if(error){res.status(400).json({message:error});return;}}
   const release=lockExpenseOperation(req.user.companyId,id);
   if(!release){res.status(409).json({message:'La boleta tiene otra operación en curso. Espera y recarga.'});return;}
   try {
@@ -36,7 +38,7 @@ export async function correctExpenseController(req: AuthenticatedRequest,res: Re
   } catch(error) {
     const message=error instanceof Error?error.message:String(error);
     if(message.includes('CORRECTION_FORBIDDEN')) {res.sendStatus(403);return;}
-    if(message.includes('CORRECTION_CONFLICT')) {res.status(409).json({message:'La boleta cambió, no está disponible o tiene una sincronización pendiente. Recarga el detalle antes de corregirla.'});return;}
+    if(message.includes('CORRECTION_CONFLICT')) {res.status(409).json({message:'Solo se pueden corregir boletas aprobadas, sin sincronización pendiente y con los valores actuales. Recarga el detalle.'});return;}
     if(message.includes('CORRECTION_UNCHANGED')) {res.status(400).json({message:'No hay cambios en fecha o monto para guardar.'});return;}
     res.status(500).json({message:'No fue posible guardar la corrección.'});
   }finally{release();}

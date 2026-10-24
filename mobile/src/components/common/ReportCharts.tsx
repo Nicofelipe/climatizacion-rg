@@ -3,15 +3,20 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { dashboardPalette } from './DashboardOverview.styles';
 import { formatCurrency } from '@/utils/currency';
+import ChartEntrance from './ChartEntrance';
 
 export const percent = (value: number, total: number) => total > 0 ? Math.round(value / total * 1000) / 10 : 0;
 const chartPress=(handler:()=>void)=>Platform.OS==='web'?{onClick:handler}:{onPress:handler};
 
 export function ExpenseDonut({ categories, total }: { categories: { name: string; amount: number; count: number }[]; total: number }) {
+ return <ChartEntrance>{progress=><DonutChart categories={categories} total={total} progress={progress}/>}</ChartEntrance>;
+}
+function DonutChart({categories,total,progress}:{categories:{name:string;amount:number;count:number}[];total:number;progress:number}){
   const [selected, setSelected] = useState<number | null>(null);
   const active = selected !== null ? categories[selected] : null;
   const radius = 72;
   const circumference = 2 * Math.PI * radius;
+  const largest=Math.max(0,...categories.map(item=>item.amount));
   let offset = 0;
   return <View style={{ gap: 22 }}>
     <View style={{ alignItems: 'center' }}>
@@ -19,10 +24,10 @@ export function ExpenseDonut({ categories, total }: { categories: { name: string
         <Circle cx={110} cy={110} r={radius} fill="none" stroke="#EEF2F7" strokeWidth={27} />
         <G transform="rotate(-90 110 110)">{categories.map((category, index) => {
           if (category.amount <= 0) return null;
-          const length = total > 0 ? category.amount / total * circumference : 0;
+          const length = total > 0 ? category.amount / total * circumference * progress : 0;
           const start = offset; offset += length;
           return <Circle key={category.name} cx={110} cy={110} r={radius} fill="none" stroke={dashboardPalette[index % dashboardPalette.length]}
-            strokeWidth={selected === index ? 33 : 27} strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-start}
+            strokeWidth={selected === index ? 35 : category.amount===largest ? 31 : 25} strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-start}
             opacity={selected === null || selected === index ? 1 : 0.45} {...chartPress(() => setSelected(selected === index ? null : index))} />;
         })}</G>
         <SvgText x={110} y={105} textAnchor="middle" fill="#17233D" fontSize={25} fontWeight="700">{active ? `${percent(active.amount, total)}%` : total > 0 ? '100%' : '0%'}</SvgText>
@@ -39,22 +44,26 @@ export function ExpenseDonut({ categories, total }: { categories: { name: string
 
 export interface LinePoint { key: string; label: string; description: string; amount: number }
 export function ExpenseLine({ points }: { points: LinePoint[] }) {
+ return <ChartEntrance>{progress=><LineChart points={points} progress={progress}/>}</ChartEntrance>;
+}
+function LineChart({points,progress}:{points:LinePoint[];progress:number}){
   const [selection, setSelection] = useState<number | null>(null);
   const max = Math.max(1, ...points.map(point => point.amount));
   const x = (index: number) => points.length <= 1 ? 330 : 60 + index / (points.length - 1) * 555;
-  const y = (amount: number) => 185 - amount / max * 155;
+  const axisY = (amount:number)=>185-amount/max*155;
+  const y = (amount: number) => 185 - amount / max * 155 * progress;
   const line = points.map((point, index) => `${index ? 'L' : 'M'} ${x(index)} ${y(point.amount)}`).join(' ');
   const area = points.length ? `${line} L ${x(points.length - 1)} 185 L ${x(0)} 185 Z` : '';
   const active = selection !== null ? points[selection] : null;
   return <View style={{ gap: 10 }}>
     <Svg width="100%" height={235} viewBox="0 0 640 225" accessibilityLabel="Evolución del gasto en el período">
       <Defs><LinearGradient id="reportArea" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#0D9488" stopOpacity={0.22} /><Stop offset="1" stopColor="#0D9488" stopOpacity={0.015} /></LinearGradient></Defs>
-      {[0, 0.5, 1].map(fraction => <G key={fraction}><Line x1={60} x2={615} y1={y(max * fraction)} y2={y(max * fraction)} stroke="#E7EDF5" strokeDasharray="4 5" /><SvgText x={50} y={y(max * fraction) + 4} fill="#7C899D" fontSize={10} textAnchor="end">{new Intl.NumberFormat('es-CL', { notation: 'compact', maximumFractionDigits: 1 }).format(max === 1 && !points.some(p => p.amount > 0) ? 0 : max * fraction)}</SvgText></G>)}
+      {[0, 0.5, 1].map(fraction => <G key={fraction}><Line x1={60} x2={615} y1={axisY(max * fraction)} y2={axisY(max * fraction)} stroke="#E7EDF5" strokeDasharray="4 5" /><SvgText x={50} y={axisY(max * fraction) + 4} fill="#7C899D" fontSize={10} textAnchor="end">{new Intl.NumberFormat('es-CL', { notation: 'compact', maximumFractionDigits: 1 }).format(max === 1 && !points.some(p => p.amount > 0) ? 0 : max * fraction)}</SvgText></G>)}
       {area ? <Path d={area} fill="url(#reportArea)" /> : null}
       {line ? <Path d={line} stroke="#0D9488" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" fill="none" /> : null}
       {points.map((point, index) => <G key={point.key}>
         {(index === 0 || index === points.length - 1 || index % Math.max(1, Math.ceil(points.length / 7)) === 0) ? <SvgText x={x(index)} y={210} fill="#7C899D" fontSize={10} textAnchor="middle">{point.label}</SvgText> : null}
-        <Circle cx={x(index)} cy={y(point.amount)} r={selection === index ? 7 : points.length <= 12 ? 5 : 3.5} fill={selection === index ? '#17233D' : '#0D9488'} stroke="white" strokeWidth={1.5} />
+        <Circle cx={x(index)} cy={y(point.amount)} r={selection === index ? 8 : point.amount===max ? 6.5 : points.length <= 12 ? 5 : 3.5} fill={selection === index ? '#17233D' : '#0D9488'} stroke="white" strokeWidth={1.5} />
         <Rect x={x(index) - Math.max(6, 555 / Math.max(1, points.length) / 2)} y={12} width={Math.max(12, 555 / Math.max(1, points.length))} height={180} fill="transparent" {...chartPress(() => setSelection(index))} />
       </G>)}
     </Svg>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import DashboardPeriodSelector from './DashboardPeriodSelector';
 import { ExpenseDonut, ExpenseLine, percent } from './ReportCharts';
 import ExpenseScopeSelector from './ExpenseScopeSelector';
@@ -11,6 +11,8 @@ import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/utils/currency';
 import { Colors } from '@/theme';
+import {requestJson} from '@/api/http';
+import {saveReport} from '@/utils/saveReport';
 
 const stateDesign = [
   { status: 'APPROVED', label: 'Aprobadas', color: '#16A34A', background: '#DCFCE7', icon: 'checkmark-circle-outline' },
@@ -25,6 +27,16 @@ export default function ReportsOverview() {
   const [mode, setMode] = useState<'month' | 'year'>('month');
   const [chartMode, setChartMode] = useState<'daily' | 'monthly'>('daily');
   const [scope,setScope]=useState<'personal'|'company'>('company');
+  const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
+  async function downloadExcel(){
+    if(!token||exporting)return;setExporting(true);setExportError('');
+    try{
+      const query=`year=${period.slice(0,4)}${mode==='month'?`&month=${period.slice(5,7)}`:''}&scope=${scope}`;
+      const result=await requestJson(`${process.env.EXPO_PUBLIC_API_URL}/reports/expenses?${query}`,{headers:{Authorization:`Bearer ${token}`}},60000);
+      await saveReport(result.filename,result.base64,result.mimeType);
+    }catch(error){setExportError(error instanceof Error?error.message:'No fue posible descargar el Excel.');}
+    finally{setExporting(false);}
+  }
   const { data, loading, error, reload } = useExpenseDashboard(token, period, mode,scope);
   const wide = useWindowDimensions().width >= 900;
   const approved = data?.states.find(item => item.status === 'APPROVED');
@@ -35,7 +47,7 @@ export default function ReportsOverview() {
   const peak = points.reduce<(typeof points)[number] | null>((best, point) => point.amount > (best?.amount ?? 0) ? point : best, null);
   const peakTies = peak ? points.filter(point => point.amount === peak.amount).length : 0;
 
-  return <SafeAreaView style={styles.page} edges={['top', 'left', 'right']}>
+  return <View style={styles.page}>
     <RefreshableScrollView contentContainerStyle={styles.content} refreshing={loading} onRefresh={reload}>
       <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.eyebrow}>TUS NÚMEROS, CON CLARIDAD</Text><Text style={styles.title}>Reportes</Text></View><View style={styles.headerIcon}><Ionicons name="analytics-outline" size={27} color={Colors.primary} /></View></View>
       <Text style={styles.subtitle}>{user?.role === 'ADMIN' ? 'Una mirada completa a los gastos de tu empresa.' : 'Entiende cómo se distribuyen tus gastos y cómo cambian en el tiempo.'}</Text>
@@ -45,9 +57,10 @@ export default function ReportsOverview() {
         <View style={styles.scope}><Ionicons name={user?.role === 'ADMIN'&&scope==='company' ? 'people-outline' : 'person-outline'} size={14} color={Colors.primary} /><Text style={styles.scopeText}>{user?.role === 'ADMIN'&&scope==='company' ? 'Toda tu empresa, incluyéndote' : 'Solo tus boletas'}</Text></View>
       </View>
       {error ? <View style={styles.panel}><Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{error}</Text><Pressable onPress={reload} accessibilityRole="button"><Text style={styles.link}>Reintentar →</Text></Pressable></View> : null}
+      {user?.role==='ADMIN'?<View style={styles.panel}><Pressable accessibilityRole="button" disabled={exporting} onPress={()=>{void downloadExcel();}} style={{flexDirection:'row',gap:10,alignItems:'center'}}>{exporting?<ActivityIndicator color={Colors.primary}/>:<Ionicons name="download-outline" size={23} color={Colors.primary}/>}<Text style={{color:Colors.primary,fontWeight:'700'}}>{exporting?'Preparando Excel…':`Descargar Excel ${mode==='year'?'anual':'mensual'}`}</Text></Pressable><Text style={styles.caption}>Resumen, boletas aprobadas y una hoja separada de pendientes y rechazadas. Año de enero a diciembre, según la fecha de la boleta.</Text>{exportError?<Text accessibilityRole="alert" style={{color:'#B91C1C'}}>{exportError}</Text>:null}</View>:null}
       {loading ? <View style={styles.panel}><ActivityIndicator color={Colors.primary} /><Text style={styles.subtitle}>Preparando tus gráficos…</Text></View> : data ? <>
         <View style={styles.kpis}>
-          <View style={[styles.kpi, styles.darkKpi]}><Text style={styles.darkLabel}>GASTO DEL PERÍODO</Text><Text style={styles.darkValue}>{formatCurrency(data.total)}</Text><Text style={styles.darkHint}>{mode === 'year' ? data.periodLabel : new Date(`${period}-15T12:00:00Z`).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}</Text></View>
+          <View style={[styles.kpi, styles.darkKpi]}><Text style={styles.darkLabel}>{user?.role==='ADMIN'&&scope==='company'?'GASTO DE LA EMPRESA':'MI GASTO DEL PERÍODO'}</Text><Text style={styles.darkValue}>{formatCurrency(data.total)}</Text><Text style={styles.darkHint}>{mode === 'year' ? data.periodLabel : new Date(`${period}-15T12:00:00Z`).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}</Text><Text style={styles.darkHint}>{counted} boletas pendientes y aprobadas · sin rechazadas</Text></View>
           <View style={styles.kpi}><View style={styles.smallIcon}><Ionicons name="receipt-outline" size={20} color={Colors.primary} /></View><Text style={styles.kpiValue}>{formatCurrency(counted ? Math.round(data.total / counted) : 0)}</Text><Text style={styles.kpiLabel}>Promedio por boleta</Text><Text style={styles.caption}>Pendientes y aprobadas</Text></View>
           <View style={styles.kpi}><View style={[styles.smallIcon, { backgroundColor: '#EDE9FE' }]}><Ionicons name="checkmark-done-outline" size={20} color="#7C3AED" /></View><Text style={styles.kpiValue}>{percent(approved?.count ?? 0, data.receiptCount)}%</Text><Text style={styles.kpiLabel}>Boletas aprobadas</Text><Text style={styles.caption}>{approved?.count ?? 0} de {data.receiptCount} registros del período</Text></View>
         </View>
@@ -86,7 +99,7 @@ export default function ReportsOverview() {
         <Text style={styles.footnote}>Montos en CLP · gasto incluye pendientes y aprobadas; excluye rechazadas.{ '\n' }{data.companyName} · {data.scope === 'personal' ? 'Información de tus propias boletas' : 'Información de tu empresa'}</Text>
       </> : null}
     </RefreshableScrollView>
-  </SafeAreaView>;
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -96,7 +109,7 @@ const styles = StyleSheet.create({
   headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E0F2F1' },
   segment: { flexDirection: 'row', alignSelf: 'flex-start', padding: 4, borderRadius: 12, backgroundColor: '#E9EEF7', gap: 4 }, segmentOption: { paddingVertical: 9, paddingHorizontal: 20, borderRadius: 9 },
   scope: { flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: '#E1F5EF', borderRadius: 20, padding: 10 }, scopeText: { color: Colors.primary, fontWeight: '600', fontSize: 12 },
-  kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 }, kpi: { flex: 1, minWidth: 220, padding: 22, backgroundColor: 'white', borderRadius: 20, borderColor: Colors.border, borderWidth: 1, gap: 10 }, darkKpi: { backgroundColor: '#17233D', borderColor: '#17233D', justifyContent: 'center' },
+  kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 }, kpi: { flex: 1, minWidth: 220, padding: 16, backgroundColor: 'white', borderRadius: 16, borderColor: Colors.border, borderWidth: 1, gap: 7 }, darkKpi: { backgroundColor: '#17233D', borderColor: '#17233D', justifyContent: 'center' },
   darkLabel: { color: '#ADC0DE', fontSize: 10, letterSpacing: 1.5, fontWeight: '700' }, darkValue: { color: 'white', fontSize: 34, fontWeight: '800', letterSpacing: -1 }, darkHint: { color: '#B8C8DE', fontSize: 12, textTransform: 'capitalize' },
   smallIcon: { backgroundColor: '#E1F5EF', width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }, kpiValue: { color: Colors.text, fontWeight: '800', fontSize: 27, letterSpacing: -0.7 }, kpiLabel: { color: Colors.text, fontWeight: '600', fontSize: 13 }, caption: { color: Colors.textSecondary, fontSize: 12, lineHeight: 20 },
   panel: { backgroundColor: 'white', borderRadius: 22, borderWidth: 1, borderColor: Colors.border, padding: 22, gap: 18 }, panelTitle: { color: Colors.text, fontSize: 19, fontWeight: '700', letterSpacing: -0.4 }, chartIcon: { backgroundColor: '#E1F5EF', borderRadius: 12, padding: 10 },

@@ -49,9 +49,10 @@ let currentStatus = 'PENDING';
 let deleted = 0;
 const cases = [
   ['employee owns pending receipt', 'EMPLOYEE', 1, 10, 'PENDING', 0, true],
+  ['administrator owns pending receipt', 'ADMIN', 1, 10, 'PENDING', 0, true],
   ['employee cannot change coworker receipt', 'EMPLOYEE', 1, 11, 'PENDING', 0, false],
   ['employee cannot cross company boundary', 'EMPLOYEE', 2, 10, 'PENDING', 0, false],
-  ['admin can manage company pending receipt', 'ADMIN', 1, 11, 'PENDING', 0, true],
+  ['admin cannot modify or withdraw another member pending receipt', 'ADMIN', 1, 11, 'PENDING', 0, false],
   ['admin cannot cross company boundary', 'ADMIN', 2, 11, 'PENDING', 0, false],
   ['employee cannot change approved receipt', 'EMPLOYEE', 1, 10, 'APPROVED', 0, false],
   ['admin cannot change approved receipt', 'ADMIN', 1, 11, 'APPROVED', 0, false],

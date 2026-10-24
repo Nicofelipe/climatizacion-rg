@@ -8,11 +8,16 @@ export default function Button({
   onPress,
   loading = false,
   disabled = false,
+  selected = false,
 }: ButtonProps) {
   return (
     <Pressable
-      style={[
+      accessibilityRole="button"
+      accessibilityState={{disabled:disabled||loading,selected,busy:loading}}
+      style={({pressed})=>[
         styles.button,
+        selected && {backgroundColor:'#17233D',borderWidth:2,borderColor:'#53D5B5'},
+        pressed && {backgroundColor:'#075E54',transform:[{scale:0.98}]},
         disabled && styles.disabled,
       ]}
       onPress={onPress}

@@ -21,6 +21,8 @@ export async function autoApproveSoleAdmin(companyId:number,userId:number,expens
         AND EXISTS(SELECT 1 FROM dbo.[File] f WHERE f.CompanyId=dbo.Expense.CompanyId AND f.EntityId=dbo.Expense.Id AND f.EntityType=N'EXPENSE');
       INSERT INTO dbo.AuditLog(CompanyId,UserId,Action,Entity,EntityId,Reason,CreatedAt)
         SELECT ?,?,N'AUTO_APPROVE_SOLE_ADMIN',N'EXPENSE',Id,N'Aprobación automática: único administrador activo de la empresa al registrar la boleta.',SYSUTCDATETIME() FROM @Changed;
+      INSERT INTO dbo.UserNotification(CompanyId,UserId,ExpenseId,Kind,EventKey)
+        SELECT e.CompanyId,e.UserId,e.Id,N'APPROVED',CONCAT(N'REVIEW:',e.Id,N':APPROVED') FROM @Changed c JOIN dbo.Expense e ON e.Id=c.Id;
     END;
     COMMIT TRANSACTION; SELECT Id FROM @Changed;
     END TRY BEGIN CATCH IF @@TRANCOUNT>0 ROLLBACK TRANSACTION; THROW; END CATCH;

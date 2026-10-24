@@ -11,6 +11,7 @@ import RefreshableScrollView from '@/components/common/RefreshableScrollView';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils/currency';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ExpenseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -47,6 +48,8 @@ export default function ExpenseDetailScreen() {
     getExpenseApi(token, Number(id)).then(async data => {
       if (!active) return;
       setExpense(data); setLoading(false);
+      const seenKey=`seen-receipts:${user?.companyId}:${user?.id}`;
+      void AsyncStorage.getItem(seenKey).then(value=>{const ids=value?JSON.parse(value):[];const next=new Set<number>(Array.isArray(ids)?ids:[]);next.add(data.Id);return AsyncStorage.setItem(seenKey,JSON.stringify([...next].slice(-2000)));}).catch(()=>{});
       if (!data.file) return;
       setImageLoading(true);
       try {
@@ -56,7 +59,7 @@ export default function ExpenseDetailScreen() {
       finally { if (active) setImageLoading(false); }
     }).catch(err => { if (active) { setError(err instanceof Error ? err.message : 'Boleta no disponible.'); setLoading(false); } });
     return () => { active = false; };
-  }, [id, token, attempt]));
+  }, [id, token, attempt,user?.companyId,user?.id]));
 
   const row = (label: string, value: string) => <View style={{ gap: 4 }} key={label}>
     <Text style={{ color: Colors.textSecondary, fontSize: 13 }}>{label}</Text>
@@ -93,11 +96,11 @@ export default function ExpenseDetailScreen() {
           <Text style={{ color: Colors.primary, marginTop: 8 }}>Toca para ampliar</Text>
         </Pressable> : !expense.file ? <Text>No hay una imagen asociada a este registro.</Text> : null}
         {imageError ? <><Text accessibilityRole="alert" style={{ color: Colors.danger }}>{imageError}</Text><Button title="Reintentar imagen" onPress={() => setAttempt(value => value + 1)} /></> : null}
-        {token ? <ExpenseHistory key={`${expense.Id}-${attempt}`} id={expense.Id} token={token} admin={user?.role === 'ADMIN'} date={expense.ExpenseDate} amount={expense.TotalAmount} syncPending={expense.DriveSyncPending} onChanged={() => setAttempt(value => value + 1)} /> : null}
-        {expense.Status === 'PENDING' && !expense.DriveSyncPending ? <>
+        {token ? <ExpenseHistory key={`${expense.Id}-${attempt}`} id={expense.Id} token={token} admin={user?.role === 'ADMIN'} status={expense.Status} date={expense.ExpenseDate} amount={expense.TotalAmount} syncPending={expense.DriveSyncPending} onChanged={() => setAttempt(value => value + 1)} /> : null}
+        {expense.UserId===user?.id && expense.Status === 'PENDING' && !expense.DriveSyncPending ? <>
           <Text style={{ color: Colors.textSecondary }}>Puedes modificar esta boleta mientras esté pendiente.</Text>
           <Button title="Editar boleta" onPress={() => router.push({ pathname: '/(protected)/expenses/create', params: { editId: expense.Id } })} />
-        </> : <Text style={{ color: Colors.textSecondary }}>{user?.role === 'ADMIN' ? 'Las correcciones de fecha o monto se realizan con motivo e historial, conservando el estado de revisión.' : expense.Status === 'REJECTED' ? 'Esta boleta fue rechazada y no se puede modificar. Debes ingresar una nueva boleta.' : 'Esta boleta no está disponible para edición del trabajador.'}</Text>}
+        </> : <Text style={{ color: Colors.textSecondary }}>{user?.role === 'ADMIN' && expense.Status==='PENDING' ? 'Revisa los datos tal como los presentó el integrante. Puedes aprobar o rechazar con motivo; no editar su rendición.' : expense.Status==='APPROVED' ? 'Boleta aprobada. Solo se permite una corrección administrativa excepcional con motivo y registro del responsable.' : expense.Status === 'REJECTED' ? 'Esta boleta fue rechazada y no se puede modificar. Debes ingresar una nueva boleta.' : 'Esta boleta no está disponible para edición.'}</Text>}
         {expense.Status === 'REJECTED' ? <Button title="Registrar nuevamente" onPress={() => router.push('/(protected)/expenses/create')} /> : null}
         {user?.role==='ADMIN'&&expense.UserId===user.id&&expense.Status==='PENDING'&&!expense.CanReview?<Text style={{color:Colors.textSecondary}}>Otro administrador debe revisar esta boleta. No puedes aprobar ni rechazar tu propia rendición cuando existe más de un administrador activo.</Text>:null}
         {user?.role === 'ADMIN' && expense.Status === 'PENDING' && expense.CanReview ? <View style={{ backgroundColor: Colors.surface, padding: Spacing.lg, borderRadius: 16, gap: Spacing.md }}>

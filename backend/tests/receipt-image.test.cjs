@@ -15,7 +15,7 @@ function stub(relativePath, exports) {
 stub('../src/services/expense.service.ts', {
   finishExpenseSync:async()=>{},
   createExpense: async () => { writes++; return { Id: 1 }; },
-  getExpenseById: async () => ({ Id: 1, Status: 'APPROVED' }),
+  getExpenseById: async () => ({ Id: 1, UserId:10, Status: 'APPROVED' }),
   rollbackCreatedExpense: async () => { rolledBack = true; },
 });
 stub('../src/services/googleDrive.service.ts', {
@@ -75,6 +75,7 @@ test('receipt image validation and temporary file cleanup', async t => {
 
   for (const [name, controller, overrides, expected] of [
     ['invalid creation fields', createExpenseController, { body: {} }, 400],
+    ['closed receipt year', createExpenseController, { body: {...body,expenseDate:'2020-01-01'} }, 400],
     ['unauthenticated creation', createExpenseController, { user: undefined }, 401],
     ['invalid update ID', updateExpenseController, { params: { id: 'invalid' } }, 400],
     ['invalid update fields', updateExpenseController, { body: {} }, 400],

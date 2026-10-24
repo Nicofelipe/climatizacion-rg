@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { availablePeriodOptions } from '@/utils/periodOptions';
 import { Colors } from '@/theme';
 import RefreshableScrollView from './RefreshableScrollView';
+import ClepitBrand from './ClepitBrand';
 
 const avatars = [
   { name: 'Iniciales', icon: null, color: '#0F8277', light: '#DDF4ED' },
@@ -41,7 +43,7 @@ export default function ProfileOverview() {
     try { await AsyncStorage.setItem(key, String(index)); setAvatar(index); setChoosing(false); setMessage('Avatar actualizado en este dispositivo.'); }
     catch { setMessage('No pudimos guardar el avatar. Inténtalo nuevamente.'); }
   }
-  return <SafeAreaView style={s.page} edges={['top', 'left', 'right']}><RefreshableScrollView refreshing={loading} onRefresh={reload} contentContainerStyle={s.content}>
+  return <View style={s.page}><RefreshableScrollView refreshing={loading} onRefresh={reload} contentContainerStyle={s.content}>
     <Text style={s.eyebrow}>TU ESPACIO PERSONAL</Text><Text style={s.title}>Mi perfil</Text>
     <Text style={s.subtitle}>Tu cuenta, tu identidad y todo listo para seguir.</Text>
     <Animated.View style={[s.hero, { opacity: fade, transform: [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
@@ -71,14 +73,16 @@ export default function ProfileOverview() {
     </View>
     <View style={s.privacy}><Ionicons name="lock-closed-outline" size={23} color={Colors.primary} /><View style={{ flex: 1, gap: 5 }}><Text style={s.label}>Un espacio para tu empresa</Text><Text style={s.hint}>{admin ? 'Tu acceso está limitado a la información de tu empresa.' : 'Tu cuenta te permite consultar tus propias boletas. El respaldo de imágenes lo gestiona tu empresa.'}</Text></View></View>
     <Pressable accessibilityRole="button" onPress={logout} style={s.logout}><Ionicons name="log-out-outline" size={21} color="#B94141" /><Text style={s.logoutText}>Cerrar sesión</Text></Pressable>
-    <Text style={s.footer}>Cada boleta cuenta. Gracias por mantener tus registros al día.</Text>
+    <View style={{alignItems:'center'}}><ClepitBrand width={145}/></View>
+    <Text style={s.footer}>Clepit · Cada boleta cuenta.</Text>
+    <Text style={s.footer}>Versión {Constants.expoConfig?.version??'de pruebas'}</Text>
   </RefreshableScrollView>
     <Modal visible={choosing} transparent animationType="fade" onRequestClose={() => setChoosing(false)}><View style={s.overlay}><View style={s.dialog} accessibilityViewIsModal>
       <View style={s.dialogHeader}><Text style={s.section}>Elige tu avatar</Text><Pressable accessibilityRole="button" accessibilityLabel="Cerrar selector de avatar" onPress={() => setChoosing(false)}><Ionicons name="close" size={25} color={Colors.text} /></Pressable></View>
       <Text style={s.hint}>Dale un toque tuyo. Se guarda en este dispositivo para tu cuenta.</Text>
       <View style={s.options}>{avatars.map((item, index) => <Pressable key={item.name} accessibilityRole="button" accessibilityLabel={`Avatar ${item.name}`} accessibilityState={{ selected: avatar === index }} onPress={() => selectAvatar(index)} style={[s.option, { borderColor: avatar === index ? item.color : 'transparent' }]}><View style={[s.optionAvatar, { backgroundColor: item.light }]}>{item.icon ? <Ionicons name={item.icon} size={30} color={item.color} /> : <Text style={{ fontSize: 23, fontWeight: '800', color: item.color }}>{initials}</Text>}</View><Text style={s.hint}>{item.name}</Text></Pressable>)}</View>
     </View></View></Modal>
-  </SafeAreaView>;
+  </View>;
 }
 function Info({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
   return <View style={s.info}><View style={s.icon}><Ionicons name={icon} size={20} color={Colors.primary} /></View><View style={{ flex: 1, gap: 5 }}><Text style={s.hint}>{label}</Text><Text selectable style={s.label}>{value}</Text></View></View>;

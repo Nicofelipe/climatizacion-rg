@@ -19,7 +19,7 @@ export async function correctExpense(input: CorrectionInput) {
       DECLARE @Before nvarchar(max), @After nvarchar(max);
       SELECT @Before=(SELECT ExpenseDate,TotalAmount,NetAmount,VatAmount,Status FROM dbo.Expense WITH (UPDLOCK,HOLDLOCK)
         WHERE Id=? AND CompanyId=? AND IsDeleted=0 AND ExpenseDate=CONVERT(date,?) AND TotalAmount=?
-        AND DriveSyncPending=0 FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
+        AND Status=N'APPROVED' AND DriveSyncPending=0 FOR JSON PATH,WITHOUT_ARRAY_WRAPPER);
       IF @Before IS NULL THROW 50021, 'CORRECTION_CONFLICT', 1;
       IF JSON_VALUE(@Before,'$.ExpenseDate')= ? AND CONVERT(decimal(18,2),JSON_VALUE(@Before,'$.TotalAmount'))=?
         THROW 50022, 'CORRECTION_UNCHANGED', 1;

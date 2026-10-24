@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Climatización RG",
+    "name": "Clepit",
     "slug": "climatizacion-rg",
-    "version": "1.0.0",
+    "version": "1.0.10",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
 
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/clepit-icon.png",
 
     "scheme": "climatizacion-rg",
 
@@ -15,25 +15,28 @@
     },
 
     "android": {
+      "versionCode": 11,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "cl.rg.climatizacion",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#0057B8"
+        "foregroundImage": "./assets/images/clepit-icon.png",
+        "backgroundColor": "#FFFFFF"
       }
     },
 
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/clepit-icon.png"
     },
 
     "plugins": [
+      "expo-sharing",
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0057B8",
-          "image": "./assets/images/splash-icon.png",
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/clepit-icon.png",
           "imageWidth": 180
         }
       ]

@@ -40,6 +40,10 @@ export async function reviewExpenses(input: {
       SELECT ?, ?, CASE WHEN e.UserId=@Reviewer THEN N'SELF_APPROVE_EXPENSE' ELSE ? END, N'EXPENSE', c.Id,
         CASE WHEN e.UserId=@Reviewer THEN N'Confirmación propia: único administrador activo de la empresa.' ELSE NULL END,SYSUTCDATETIME()
         FROM @Changed c JOIN dbo.Expense e ON e.Id=c.Id AND e.CompanyId=@Company;
+      INSERT INTO dbo.UserNotification(CompanyId,UserId,ExpenseId,Kind,EventKey)
+        SELECT e.CompanyId,e.UserId,e.Id,@Decision,CONCAT(N'REVIEW:',e.Id,N':',@Decision)
+        FROM @Changed c JOIN dbo.Expense e ON e.Id=c.Id AND e.CompanyId=@Company;
+      UPDATE dbo.UserNotification SET ReadAt=COALESCE(ReadAt,SYSUTCDATETIME()) WHERE CompanyId=@Company AND Kind=N'PENDING_REVIEW' AND ExpenseId IN(SELECT Id FROM @Changed);
       COMMIT TRANSACTION;
       SELECT Id FROM @Changed ORDER BY Id;
     END TRY
