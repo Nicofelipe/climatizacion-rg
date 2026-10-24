@@ -48,6 +48,7 @@ export default function Dashboard() {
 
       <View>
         <Text style={styles.greeting}>{user?.firstName?.trim() ? `Hola, ${user.firstName.trim()}.` : 'Hola.'}</Text>
+        <Pressable accessibilityRole="button" onPress={()=>router.push('/(protected)/expenses/scan')} style={{padding:16,borderRadius:16,backgroundColor:'#DFF4EC',flexDirection:'row',alignItems:'center',gap:12,marginTop:15}}><Ionicons name="scan-outline" size={29} color="#0F8277"/><View style={{flex:1}}><Text style={{fontWeight:'800',color:'#0F8277',fontSize:16}}>Registrar con cámara</Text><Text style={{color:'#42665D',fontSize:12,marginTop:4}}>Lectura de boletas · versión de pruebas</Text></View><Ionicons name="chevron-forward" size={20} color="#0F8277"/></Pressable>
         <Text style={styles.subtitle}>{companyView ? 'Gastos de todos los integrantes de tu empresa, incluidos los tuyos.' : 'Este resumen incluye únicamente tus propias boletas.'}</Text>
       </View>
       {admin?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}

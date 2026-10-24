@@ -1,4 +1,5 @@
 import FormScrollView from '@/components/common/FormScrollView';
+import {takeScannedReceiptDraft} from '@/utils/scannedReceiptDraft';
 import ReceiptDateFilter from '@/components/common/ReceiptDateFilter';
 import { validReceiptDate,todayReceiptDate } from '@/utils/receiptDate';
 import {receiptSubmissionError} from '@/utils/receiptSubmission';
@@ -25,7 +26,7 @@ import {
 
 export default function CreateExpenseScreen() {
     const { token,user } = useAuth();
-    const { editId } = useLocalSearchParams<{ editId?: string }>();
+    const { editId,fromScan } = useLocalSearchParams<{ editId?: string;fromScan?:string }>();
     const isEditing = Boolean(editId);
     const receiptToday=todayReceiptDate();
     const firstReceiptDate=`${Number(receiptToday.slice(0,4))-(receiptToday.slice(5)<='03-15'?1:0)}-01-01`;
@@ -51,6 +52,13 @@ export default function CreateExpenseScreen() {
     const [imageAttempt, setImageAttempt] = useState(0);
     const [supplierId, setSupplierId] = useState<number | null>(null);
     const [editBlocked, setEditBlocked] = useState(false);
+
+    useEffect(()=>{
+        if(fromScan!=='1'||!user)return;
+        const draft=takeScannedReceiptDraft(user.id,user.companyId);if(!draft)return;
+        setReceiptNumber(draft.receiptNumber);setExpenseDate(draft.expenseDate);setTotalAmount(draft.totalAmount);setExpenseTypeId(draft.expenseTypeId);setImageUri(draft.uri);setImageMimeType(draft.mimeType);
+        setDescription(`IVA de la foto revisado: ${draft.vatAmount} CLP. Datos propuestos por lectura OCR y confirmados por el usuario.`);
+    },[fromScan,user?.id,user?.companyId]);
 
     useEffect(() => {
         if (!editId || !token) return;
