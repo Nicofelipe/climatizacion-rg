@@ -53,7 +53,7 @@ export default function ScanReceipt(){
  return <AppContainer><FormScrollView contentContainerStyle={{paddingBottom:40,gap:18}}>
   <Pressable onPress={()=>router.back()}><Text style={{color:Colors.primary}}>← Volver</Text></Pressable>
   <Text style={{fontSize:27,fontWeight:'800',color:Colors.text}}>Escanear boleta</Text>
-  <View style={{padding:14,borderRadius:14,backgroundColor:'#FFF4D6'}}><Text style={{color:'#74520A',lineHeight:21}}>CLEPIT PRUEBAS · La lectura se realiza en este teléfono. Los datos pueden contener errores y siempre debes revisarlos. No se guarda nada automáticamente.</Text></View>
+  <View style={{padding:14,borderRadius:14,backgroundColor:'#E4F5EF'}}><Text style={{color:Colors.primary,lineHeight:21}}>La lectura se realiza en este teléfono. Revisa los datos detectados y elige el tipo de gasto antes de guardar.</Text></View>
   <Button title="Tomar foto de la boleta" onPress={()=>{void pick(true);}} disabled={busy||saving||Boolean(saved)}/>
   <Button variant="secondary" title="Elegir imagen de la galería" onPress={()=>{void pick(false);}} disabled={busy||saving||Boolean(saved)}/>
   {uri?<Pressable accessibilityRole="button" accessibilityLabel="Ampliar foto para comprobar los datos" onPress={()=>setExpanded(true)}><Image source={{uri}} style={{width:'100%',height:280,borderRadius:14,backgroundColor:'#EEF2F6'}} resizeMode="contain"/><Text style={{textAlign:'center',color:Colors.primary,marginTop:8}}>Toca para ampliar y revisar la foto</Text></Pressable>:null}
