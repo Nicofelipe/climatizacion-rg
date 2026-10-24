@@ -36,3 +36,5 @@ Validación: 173 pruebas aprobadas, comprobación TypeScript del backend y móvi
 APK 1.1.2, código Android 14, paquete `cl.rg.climatizacion`, mismo firmante que Clepit. Instalar como actualización. El código queda en `fix/receipt-ocr-supermarket`, sin fusionar a `main` hasta revisión del usuario.
 
 El backend y SQL Server continúan en el notebook. Las direcciones temporales de los túneles pueden cambiar al detenerse; todavía no hay alojamiento permanente independiente del equipo.
+
+En Render se autorizó una regla **Rewrite** específica `/api/users` → `https://<tunel-backend>/api/users/`, situada antes de `/api/*`: el endpoint sin barra final devolvía `502 rewrite-error` en la pasarela aunque el backend respondía `401` correctamente. La barra final conserva el mismo router y autenticación de Express. No usar Redirect: la URL del cliente y su cabecera Authorization deben mantenerse. Al renovar el túnel, actualizar tanto esta regla como `/api/*`; `/downloads/*` usa el túnel separado que solo permite APK.
