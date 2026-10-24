@@ -1,0 +1,23 @@
+# Environment variables
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
+**/.secrets/
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Backend uploaded files
+backend/uploads/
+
+# Expo
+**/.expo/
+
+# Local build artifacts and downloaded tools
+artifacts/
+mobile/modules/**/android/build/
+mobile/modules/**/android/.gradle/

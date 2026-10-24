@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Clepit",
+    "slug": "climatizacion-rg",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+
+    "icon": "./assets/images/clepit-icon.png",
+
+    "scheme": "climatizacion-rg",
+
+    "ios": {
+      "bundleIdentifier": "cl.rg.climatizacion"
+    },
+
+    "android": {
+      "versionCode": 12,
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "cl.rg.climatizacion",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/clepit-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/clepit-icon.png"
+    },
+
+    "plugins": [
+      "expo-sharing",
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/images/clepit-icon.png",
+          "imageWidth": 180
+        }
+      ]
+    ],
+
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

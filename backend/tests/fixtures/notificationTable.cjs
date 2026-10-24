@@ -1,0 +1,1 @@
+module.exports=`CREATE TABLE #UserNotification(Id int IDENTITY PRIMARY KEY,CompanyId int,UserId int,ExpenseId int,Kind nvarchar(30),EventKey nvarchar(100),CreatedAt datetime2 DEFAULT SYSUTCDATETIME(),ReadAt datetime2 NULL);`;
