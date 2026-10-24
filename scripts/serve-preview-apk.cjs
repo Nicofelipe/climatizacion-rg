@@ -2,25 +2,26 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const apk = path.resolve(__dirname, '../artifacts/climatizacion-rg-preview.apk');
+const apkDirectory = path.resolve(process.env.CLEPIT_APK_DIR || path.join(__dirname, '../artifacts'));
+const apk = path.join(apkDirectory, 'climatizacion-rg-preview.apk');
 const downloads = new Map([
   ['/climatizacion-rg-preview.apk', apk],
-  ['/climatizacion-rg-1.0.4.apk', path.resolve(__dirname, '../artifacts/climatizacion-rg-1.0.4.apk')],
-  ['/climatizacion-rg-1.0.5.apk', path.resolve(__dirname, '../artifacts/climatizacion-rg-1.0.5.apk')],
-  ['/climatizacion-rg-1.0.6.apk', path.resolve(__dirname, '../artifacts/climatizacion-rg-1.0.6.apk')],
-  ['/climatizacion-rg-1.0.7.apk', path.resolve(__dirname, '../artifacts/climatizacion-rg-1.0.7.apk')],
-  ['/climatizacion-rg-1.0.8.apk', path.resolve(__dirname, '../artifacts/climatizacion-rg-1.0.8.apk')],
-  ['/clipit-1.0.9.apk', path.resolve(__dirname, '../artifacts/clipit-1.0.9.apk')],
-  ['/clepit-1.0.10.apk', path.resolve(__dirname, '../artifacts/clepit-1.0.10.apk')],
-  ['/clepit-pruebas-ocr-0.1.0.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.0.apk')],
-  ['/clepit-pruebas-ocr-0.1.1.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.1.apk')],
-  ['/clepit-pruebas-ocr-0.1.2.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.2.apk')],
-  ['/clepit-pruebas-ocr-0.1.3.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.3.apk')],
-  ['/clepit-pruebas-ocr-0.1.4.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.4.apk')],
-  ['/clepit-pruebas-ocr-0.1.5.apk', path.resolve(__dirname, '../artifacts/clepit-pruebas-ocr-0.1.5.apk')],
-  ['/clepit-1.1.0.apk', path.resolve(__dirname, '../artifacts/clepit-1.1.0.apk')],
-  ['/clepit-1.1.1.apk', path.resolve(__dirname, '../artifacts/clepit-1.1.1.apk')],
-  ['/clepit.apk', path.resolve(__dirname, '../artifacts/clepit-1.1.0.apk')],
+  ['/climatizacion-rg-1.0.4.apk', path.join(apkDirectory, 'climatizacion-rg-1.0.4.apk')],
+  ['/climatizacion-rg-1.0.5.apk', path.join(apkDirectory, 'climatizacion-rg-1.0.5.apk')],
+  ['/climatizacion-rg-1.0.6.apk', path.join(apkDirectory, 'climatizacion-rg-1.0.6.apk')],
+  ['/climatizacion-rg-1.0.7.apk', path.join(apkDirectory, 'climatizacion-rg-1.0.7.apk')],
+  ['/climatizacion-rg-1.0.8.apk', path.join(apkDirectory, 'climatizacion-rg-1.0.8.apk')],
+  ['/clipit-1.0.9.apk', path.join(apkDirectory, 'clipit-1.0.9.apk')],
+  ['/clepit-1.0.10.apk', path.join(apkDirectory, 'clepit-1.0.10.apk')],
+  ['/clepit-pruebas-ocr-0.1.0.apk', path.join(apkDirectory, 'clepit-pruebas-ocr-0.1.0.apk')],
+  ['/clepit-pruebas-ocr-0.1.1.apk', path.join(apkDirectory, 'clepit-pruebas-ocr-0.1.1.apk')],
+  ['/clepit-pruebas-ocr-0.1.2.apk', path.join(apkDirectory, 'clepit-pruebas-ocr-0.1.2.apk')],
+  ['/clepit-pruebas-ocr-0.1.3.apk', path.join(apkDirectory, 'clepit-pruebas-ocr-0.1.3.apk')],
+  ['/clepit-pruebas-ocr-0.1.4.apk', path.join(apkDirectory, 'clepit-pruebas-ocr-0.1.4.apk')],
+  ['/clepit-pruebas-ocr-0.1.5.apk', path.join(apkDirectory, 'clepit-pruebas-ocr-0.1.5.apk')],
+  ['/clepit-1.1.0.apk', path.join(apkDirectory, 'clepit-1.1.0.apk')],
+  ['/clepit-1.1.1.apk', path.join(apkDirectory, 'clepit-1.1.1.apk')],
+  ['/clepit.apk', path.join(apkDirectory, 'clepit-1.1.0.apk')],
 ]);
 if (!fs.existsSync(apk)) throw new Error('Primero genera artifacts/climatizacion-rg-preview.apk.');
 http.createServer((req, res) => {
