@@ -41,3 +41,11 @@ test('scan drafts can be consumed once and never cross user or company',()=>{
  setScannedReceiptDraft({userId:1,companyId:3,uri:'file:///private/photo.jpg'});assert.equal(takeScannedReceiptDraft(1,4),null);
  setScannedReceiptDraft({userId:1,companyId:3,uri:'file:///private/photo.jpg'});assert.equal(takeScannedReceiptDraft(1,3).uri,'file:///private/photo.jpg');assert.equal(takeScannedReceiptDraft(1,3),null);
 });
+
+test('tax estimates never overwrite readings, infer zero VAT, or estimate fuel',()=>{
+ const {estimateReceiptAmount:estimate}=require('../../mobile/src/utils/receiptEstimate.ts');
+ assert.equal(estimate('11900','',1).value,'1900');assert.equal(estimate('','1900',1).value,'11900');
+ for(const args of [['11900','1900',1],['','0',1],['11900','',2],['','1900',2],['','999999999',1],['bad','',1]])assert.equal(estimate(...args),null);
+ // Rounded IVA does not uniquely determine a receipt total: this is a proposal only.
+ assert.equal(estimate('','1',1).value,'6');
+});

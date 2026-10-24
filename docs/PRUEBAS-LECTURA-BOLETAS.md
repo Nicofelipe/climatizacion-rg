@@ -1,6 +1,8 @@
 # Clepit Pruebas: lectura de boletas
 
-Edición Android independiente: **Clepit Pruebas 0.1.2**, paquete `cl.rg.clepit.pruebas`. No reemplaza Clepit 1.0.10. Código aislado en el worktree `C:\Dev\clepit-camera-tests`, rama `feature/clepit-camera-ocr`; se copió la base de trabajo sin archivos de credenciales ni configuración privada.
+Edición Android independiente: **Clepit Pruebas 0.1.3**, paquete `cl.rg.clepit.pruebas`. No reemplaza Clepit 1.0.10. Código aislado en el worktree `C:\Dev\clepit-camera-tests`, rama `feature/clepit-camera-ocr`; se copió la base de trabajo sin archivos de credenciales ni configuración privada.
+
+La revisión 0.1.3 guarda directamente desde la revisión del escaneo, sin un segundo formulario. Se conserva la imagen y los datos ante errores. Agrupa líneas OCR por posición para asociar etiquetas y montos separados en columnas. Ofrece estimaciones explícitas al 19% solo a petición, sin sobrescribir lecturas ni estimar combustible; deducir total desde IVA redondeado no es exacto ni válido para boletas con exenciones u otros impuestos. Las estimaciones requieren revisión contra la foto y el IVA continúa siendo una referencia; no cambia el cálculo del servidor. La campana queda junto al perfil, respeta movimiento reducido y destaca avisos nuevos. Equipo precede a Perfil en las pestañas. Pendiente probar con fotos y teléfono reales.
 
 La revisión 0.1.2 presenta Escanear boleta y Registro manual juntos en Inicio. El botón flotante + y Registrar boleta abren la misma elección. Se unifican alturas, bordes, estados de selección y respuesta al pulsar de los botones; los campos resaltan el foco y los errores. La edición de una boleta existente conserva el acceso directo a su formulario. Validación visual final pendiente en el teléfono.
 
@@ -14,7 +16,7 @@ La revisión 0.1.1 amplía la lectura de frases como «El IVA de esta boleta es�
 4. Tomar una foto nítida o elegir una imagen de hasta 10 MB.
 5. Revisar número de boleta, fecha de emisión, monto total e IVA. Los campos son editables. Si faltan datos o existen varios candidatos, el lector avisa y deja el campo vacío en lugar de adivinar.
 6. Seleccionar el tipo de gasto y confirmar que se cotejaron los datos con la foto.
-7. Pulsar **Usar estos datos en el formulario**. Se conserva la misma fotografía y todavía se pueden modificar los datos antes de guardar.
+7. Pulsar **Guardar boleta** después de revisar y confirmar los datos. No hay un segundo formulario.
 8. Solo **Guardar boleta** envía la foto y el registro al backend de la empresa. Esta edición utiliza el mismo backend de pruebas; guardar sí crea una boleta real. La lectura por sí sola no crea registros.
 
 ## IVA y reglas

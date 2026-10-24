@@ -2,7 +2,7 @@ import {existsSync} from 'node:fs';
 import {google} from 'googleapis';
 import {executeQuery} from '../database/sqlServer';
 import {decryptSecret} from '../utils/encryption';
-import {notificationMessage} from './notificationMessage';
+import {pushSummary} from './pushSummary';
 export function pushConfigured(){return Boolean(process.env.FCM_PROJECT_ID&&/^[a-z][a-z0-9-]{4,62}$/.test(process.env.FCM_PROJECT_ID)
  &&process.env.FCM_SERVICE_ACCOUNT_FILE&&existsSync(process.env.FCM_SERVICE_ACCOUNT_FILE));}
 interface Delivery{Id:number;DeviceId:number;NotificationId:number;Kind:string;EncryptedToken:string;Attempts:number;RegistrationId:string}
@@ -11,11 +11,18 @@ export async function sendFcm(token:string,notificationId:number,kind:string){
  if(!pushConfigured())throw new Error('PUSH_NOT_CONFIGURED');
  auth??=new google.auth.GoogleAuth({keyFilename:process.env.FCM_SERVICE_ACCOUNT_FILE,scopes:['https://www.googleapis.com/auth/firebase.messaging']});
  const accessToken=await auth.getAccessToken();if(!accessToken)throw new Error('PUSH_AUTH_FAILED');
- const message=notificationMessage(kind);
+ const summary=await executeQuery<{UserId:number;CompanyId:number;UnreadCount:number}>(`SELECT TOP 1 n.UserId,n.CompanyId,
+   (SELECT COUNT(*) FROM dbo.UserNotification x JOIN dbo.Expense e ON e.Id=x.ExpenseId AND e.CompanyId=x.CompanyId
+    JOIN dbo.AppUser u ON u.Id=x.UserId AND u.CompanyId=x.CompanyId JOIN dbo.Role r ON r.Id=u.RoleId
+    WHERE x.UserId=n.UserId AND x.CompanyId=n.CompanyId AND x.ReadAt IS NULL AND e.IsDeleted=0
+     AND (x.Kind<>N'PENDING_REVIEW' OR (r.Name=N'ADMIN' AND e.Status=N'PENDING'))) AS UnreadCount
+   FROM dbo.UserNotification n WHERE n.Id=?;`,[notificationId]);
+ if(!summary[0]||summary[0].UnreadCount<=0)return;
+ const grouped=pushSummary(summary[0].UserId,summary[0].CompanyId,summary[0].UnreadCount);
  const response=await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.FCM_PROJECT_ID}/messages:send`,{
   method:'POST',signal:AbortSignal.timeout(20000),headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},
-  body:JSON.stringify({message:{token,notification:message,data:{notificationId:String(notificationId)},
-   android:{priority:'high',ttl:'86400s',notification:{channel_id:'rendiciones',visibility:'PRIVATE',tag:`notification-${notificationId}`}}}})});
+  body:JSON.stringify({message:{token,notification:{title:grouped.title,body:grouped.body},data:{notificationId:String(notificationId),openInbox:'1'},
+   android:{priority:'high',ttl:'86400s',collapse_key:grouped.tag,notification:{channel_id:'rendiciones',visibility:'PRIVATE',tag:grouped.tag,notification_count:grouped.count}}}})});
  if(!response.ok){const value=await response.json().catch(()=>null) as {error?:{details?:{errorCode?:string}[]}}|null;
   if(value?.error?.details?.some(detail=>detail.errorCode==='UNREGISTERED'))throw new Error('PUSH_DEVICE_UNREGISTERED');
   throw new Error('PUSH_SEND_FAILED');

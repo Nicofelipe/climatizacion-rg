@@ -44,7 +44,6 @@ export default function Dashboard() {
           <View style={styles.brandIcon}><Image source={require('../../../../assets/images/clipit-icon.png')} style={{width:46,height:46}} resizeMode="contain" accessibilityLabel="Clepit"/></View>
           <View style={{ flexShrink: 1 }}><Text style={styles.overline}>CLEPIT · MI ESPACIO DE TRABAJO</Text><Text style={styles.company}>{data?.companyName ?? 'Tu empresa'}</Text></View>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Abrir mi perfil" style={styles.avatar} onPress={() => router.push('/(protected)/(tabs)/profile')}><Text style={styles.avatarText}>{initials}</Text></Pressable>
       </View>
 
       <View>

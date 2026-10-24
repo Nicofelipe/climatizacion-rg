@@ -38,7 +38,7 @@ export function usePushRegistration(token:string|null,onOpen:(id:number)=>void){
  },[token]);
  useEffect(()=>{
   epoch.current++;registering.current=false;lastRegistration.current=0;void register(false);
-  const handle=(response:Notifications.NotificationResponse)=>{const id=Number(response.notification.request.content.data?.notificationId);if(Number.isSafeInteger(id)&&id>0)open.current(id);};
+  const handle=(response:Notifications.NotificationResponse)=>{const data=response.notification.request.content.data;if(data?.openInbox==='1'){open.current(0);return;}const id=Number(data?.notificationId);if(Number.isSafeInteger(id)&&id>0)open.current(id);};
   const response=Notifications.addNotificationResponseReceivedListener(handle);
   const received=Notifications.addNotificationReceivedListener(()=>notifyDataRefresh());
   const foreground=AppState.addEventListener('change',state=>{if(state==='active')void register(false);});
