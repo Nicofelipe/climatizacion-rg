@@ -293,7 +293,8 @@ export async function createExpenseController(
         ) {
             res.status(409).json({
                 message:
-                    'A receipt with this number already exists',
+                    'Ya existe una boleta con ese número en tu empresa. Revisa tus boletas antes de volver a enviarla.',
+                code: 'RECEIPT_NUMBER_ALREADY_EXISTS',
             });
             return;
         }
@@ -939,7 +940,8 @@ export async function updateExpenseController(
         ) {
             res.status(409).json({
                 message:
-                    'A receipt with this number already exists',
+                    'Ya existe una boleta con ese número en tu empresa. Revisa tus boletas antes de volver a enviarla.',
+                code: 'RECEIPT_NUMBER_ALREADY_EXISTS',
             });
             return;
         }

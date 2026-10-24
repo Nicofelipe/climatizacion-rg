@@ -81,7 +81,9 @@ export default function LoginScreen() {
             loading={isLoading}
             disabled={!email.trim() || !password}
           />
-          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <View style={{marginTop:12}}><Button variant="secondary" title="Continuar con Google" disabled={isLoading} onPress={()=>{if(isLoading)return;setError(null);void loginWithGoogle().then(()=>router.replace('/(protected)/(tabs)')).catch(error=>setError(error instanceof Error?error.message:'No fue posible ingresar con Google.'));}}/></View>
+          <Text style={{fontSize:12,color:Colors.textSecondary,lineHeight:19,marginTop:10}}>Elige en Google el mismo correo que registró tu empresa. No necesitas escribir la contraseña de Clepit para esta opción.</Text>
+          {error ? <View accessibilityRole="alert" style={{backgroundColor:'#FEF2F2',borderRadius:12,padding:12,marginTop:12}}><Text style={{color:'#991B1B',lineHeight:21}}>{error}</Text></View> : null}
           <Pressable accessibilityRole="button" onPress={()=>router.push('/(auth)/forgot-password')} style={{paddingVertical:14}}><Text style={{color:Colors.primary,fontWeight:'600',fontSize:13}}>Olvidé mi contraseña</Text></Pressable>
           <Text style={styles.help}>¿No tienes acceso? Solicita al encargado que registre tu correo y te entregue tu contraseña por un canal privado.</Text>
         </View>

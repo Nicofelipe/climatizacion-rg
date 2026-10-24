@@ -18,3 +18,13 @@ test('OAuth rejects arbitrary redirects, malformed challenge, unknown state and 
  await assert.rejects(completeGoogleLogin('unknown','code'),/INVALID_STATE/);
  await assert.rejects(exchangeGoogleTicket('unknown','verifier'),/INVALID_TICKET/);
 });
+
+test('trial return is explicitly allowed, callback remains HTTPS and no Drive scopes are requested',()=>{
+ const previous={id:process.env.GOOGLE_CLIENT_ID,redirect:process.env.GOOGLE_LOGIN_REDIRECT_URI,allowed:process.env.GOOGLE_LOGIN_APP_REDIRECTS};
+ try{
+  process.env.GOOGLE_CLIENT_ID='example.apps.googleusercontent.com';process.env.GOOGLE_LOGIN_REDIRECT_URI='https://clepit.example.test/api/auth/google/callback';process.env.GOOGLE_LOGIN_APP_REDIRECTS='clepit-pruebas://google-login';
+  const url=new URL(startGoogleLogin('clepit-pruebas://google-login','a'.repeat(64)));
+  assert.equal(url.searchParams.get('redirect_uri'),process.env.GOOGLE_LOGIN_REDIRECT_URI);assert.deepEqual(url.searchParams.get('scope').split(' '),['openid','email','profile']);
+  assert.throws(()=>startGoogleLogin('clepit-pruebas://other','a'.repeat(64)),/INVALID_REDIRECT/);
+ }finally{for(const [name,value] of Object.entries({GOOGLE_CLIENT_ID:previous.id,GOOGLE_LOGIN_REDIRECT_URI:previous.redirect,GOOGLE_LOGIN_APP_REDIRECTS:previous.allowed})){if(value===undefined)delete process.env[name];else process.env[name]=value;}}
+});

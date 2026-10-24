@@ -58,7 +58,7 @@ export default function ScanReceipt(){
   <Button variant="secondary" title="Elegir imagen de la galería" onPress={()=>{void pick(false);}} disabled={busy||saving||Boolean(saved)}/>
   {uri?<Pressable accessibilityRole="button" accessibilityLabel="Ampliar foto para comprobar los datos" onPress={()=>setExpanded(true)}><Image source={{uri}} style={{width:'100%',height:280,borderRadius:14,backgroundColor:'#EEF2F6'}} resizeMode="contain"/><Text style={{textAlign:'center',color:Colors.primary,marginTop:8}}>Toca para ampliar y revisar la foto</Text></Pressable>:null}
   {busy?<View style={{gap:10}}><ActivityIndicator color={Colors.primary}/><Text style={{textAlign:'center',color:Colors.textSecondary}}>Leyendo los datos en el teléfono…</Text></View>:null}
-  {error?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{error}</Text>:null}
+  {error&&!read?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{error}</Text>:null}
   {saved?<View style={{padding:18,backgroundColor:'#E2F5EE',borderRadius:16,gap:12}}><Text accessibilityRole="alert" style={{color:Colors.primary,fontWeight:'700'}}>Boleta guardada con su foto.</Text><Button title="Ver detalle de la boleta" onPress={()=>router.replace({pathname:'/(protected)/expenses/[id]',params:{id:String(saved)}})}/></View>:null}
   {read&&!busy&&!saved?<View pointerEvents={saving?'none':'auto'} style={{gap:18}}>
    <Text style={{fontSize:19,fontWeight:'700',color:Colors.text}}>Comprueba los datos de la foto</Text>
@@ -74,6 +74,7 @@ export default function ScanReceipt(){
    <Text style={{fontWeight:'700',color:Colors.text}}>Selecciona el tipo de gasto</Text>
    <View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}>{expenseTypes.map(item=><View key={item.id} style={{flexBasis:'46%',flexGrow:1}}><Button variant="choice" title={item.name} selected={type===item.id} onPress={()=>{setType(item.id);setConfirmed(false);}}/></View>)}</View>
    <Pressable accessibilityRole="checkbox" accessibilityState={{checked:confirmed}} onPress={()=>setConfirmed(v=>!v)} style={{flexDirection:'row',gap:10,paddingVertical:10}}><Ionicons name={confirmed?'checkbox':'square-outline'} size={25} color={Colors.primary}/><Text style={{flex:1,color:Colors.text,lineHeight:21}}>Revisé el número, la fecha, el monto y el IVA contra la imagen.</Text></Pressable>
+   {error?<View accessibilityRole="alert" style={{padding:14,borderRadius:14,borderWidth:1,borderColor:'#FECACA',backgroundColor:'#FEF2F2',gap:6}}><Text style={{fontWeight:'700',color:'#991B1B'}}>No se pudo guardar la boleta</Text><Text style={{color:'#991B1B',lineHeight:21}}>{error}</Text><Text style={{color:'#991B1B',fontSize:12}}>La foto y los datos siguen aquí para que puedas revisarlos.</Text></View>:null}
    <Button title={saving?'Guardando boleta…':'Guardar boleta'} loading={saving} onPress={()=>{void continueToForm();}}/>
    <Text style={{color:Colors.textSecondary,lineHeight:20}}>Guardar boleta envía estos datos y la foto directamente a tu empresa.</Text>
   </View>:null}

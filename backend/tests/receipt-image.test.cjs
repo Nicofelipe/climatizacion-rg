@@ -8,13 +8,14 @@ const path = require('node:path');
 let writes = 0;
 let uploadFailure = null;
 let rolledBack = false;
+let createFailure = null;
 function stub(relativePath, exports) {
   const filename = require.resolve(relativePath);
   require.cache[filename] = { id: filename, filename, loaded: true, exports };
 }
 stub('../src/services/expense.service.ts', {
   finishExpenseSync:async()=>{},
-  createExpense: async () => { writes++; return { Id: 1 }; },
+  createExpense: async () => { writes++; if(createFailure)throw createFailure; return { Id: 1 }; },
   getExpenseById: async () => ({ Id: 1, UserId:10, Status: 'APPROVED' }),
   rollbackCreatedExpense: async () => { rolledBack = true; },
 });
@@ -41,6 +42,15 @@ function response() {
 }
 
 test('receipt image validation and temporary file cleanup', async t => {
+  await t.test('duplicate receipt is actionable Spanish and never uploads or replaces an image',async()=>{
+    const folder=await fs.mkdtemp(path.join(os.tmpdir(),'rg-duplicate-')),temporaryPath=path.join(folder,'receipt.jpg');
+    try{
+      await fs.writeFile(temporaryPath,'fixture');writes=0;createFailure=new Error('RECEIPT_NUMBER_ALREADY_EXISTS');
+      const res=response();await createExpenseController({user,body,file:{path:temporaryPath,filename:'receipt.jpg',mimetype:'image/jpeg'}},res);
+      assert.equal(res.statusCode,409);assert.equal(res.payload.code,'RECEIPT_NUMBER_ALREADY_EXISTS');assert.match(res.payload.message,/Ya existe una boleta/);assert.equal(writes,1);
+      await assert.rejects(fs.access(temporaryPath),{code:'ENOENT'});
+    }finally{createFailure=null;await fs.rm(folder,{recursive:true,force:true});}
+  });
   await t.test('revoked Drive authorization returns actionable error and rolls back receipt', async () => {
     const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'rg-receipt-'));
     const temporaryPath = path.join(folder, 'receipt.jpg');
