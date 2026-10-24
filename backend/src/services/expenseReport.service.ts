@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import {getExpenses} from './expense.service';
+import path from 'node:path';
 type Expense=Awaited<ReturnType<typeof getExpenses>>[number];
 const date=(value:Date|string)=>value instanceof Date?value.toISOString().slice(0,10):String(value).slice(0,10);
 const timestamp=(value:unknown)=>value instanceof Date?value.toISOString():String(value);
@@ -21,11 +22,14 @@ export async function buildExpenseWorkbook(expenses:Expense[],period:ReturnType<
  if(rows.length>20000)throw new Error('REPORT_TOO_LARGE');
  const approved=rows.filter(row=>row.Status==='APPROVED'),other=rows.filter(row=>row.Status!=='APPROVED');
  const workbook=new ExcelJS.Workbook();workbook.creator='Clepit';workbook.created=new Date();
+ const logo=workbook.addImage({filename:path.resolve(__dirname,'../../assets/clepit-logo.png'),extension:'png'});
  const periodLabel=period.month?new Date(`${period.prefix}-15T12:00:00Z`).toLocaleDateString('es-CL',{month:'long',year:'numeric',timeZone:'America/Santiago'}):`${period.year} · enero a diciembre`;
  const scopeLabel=scope==='company'?'Toda la empresa':'Mis boletas';
  function heading(ws:ExcelJS.Worksheet,title:string,last:number){
   ws.views=[{showGridLines:false,state:'frozen',ySplit:8}];
-  ws.mergeCells(1,1,2,last);const cell=ws.getCell(1,1);cell.value=`CLEPIT  /  ${title}`;cell.font={name:'Aptos Display',size:19,bold:true,color:{argb:'FFFFFFFF'}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:navy}};cell.alignment={vertical:'middle',indent:1};ws.getRow(1).height=25;ws.getRow(2).height=16;
+  ws.mergeCells(1,3,3,last);const cell=ws.getCell(1,3);cell.value=title;cell.font={name:'Aptos Display',size:16,bold:true,color:{argb:navy}};cell.alignment={vertical:'middle',horizontal:'right',wrapText:true};
+  ws.addImage(logo,{tl:{col:0,row:0},ext:{width:200,height:76},editAs:'oneCell'});
+  for(const n of [1,2,3])ws.getRow(n).height=21;
   for(const [row,text] of [[4,companyName],[5,`Período: ${periodLabel}   ·   ${scopeLabel}`],[6,'Moneda: CLP · agrupado por fecha de la boleta, no por fecha de registro']] as const){ws.mergeCells(row,1,row,last);ws.getCell(row,1).value=text;ws.getCell(row,1).font={name:'Aptos',size:row===4?14:11,bold:row===4,color:{argb:row===4?navy:gray}};ws.getRow(row).height=23;}
   ws.properties.defaultRowHeight=22;ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
  }
@@ -40,6 +44,7 @@ export async function buildExpenseWorkbook(expenses:Expense[],period:ReturnType<
  for(const n of [8,13]){paintRow(summary.getRow(n),5,n===8?navy:teal,'FFFFFFFF',true);summary.getRow(n).height=n===13?42:30;}
  for(const n of [9,10,11,15]){paintRow(summary.getRow(n),5,n%2?'FFF0F6F8':'FFFFFFFF',navy);summary.getRow(n).height=28;}
  for(let col=3;col<=5;col++)summary.getColumn(col).numFmt='#,##0';
+ summary.pageSetup.printArea='A1:E19';
  function detail(name:string,values:Expense[],tableName:string){
   const ws=workbook.addWorksheet(name);ws.columns=[12,17,30,24,24,19,19,21,27,17,26,40,45].map(width=>({width}));heading(ws,name.toUpperCase(),13);
   const columns=['ID','Fecha boleta','Integrante','Código boleta','Tipo de gasto','Neto sin IVA','IVA','Total CLP','Fecha registro UTC','Estado','Proveedor','Descripción','Motivo de rechazo'];
@@ -50,6 +55,7 @@ export async function buildExpenseWorkbook(expenses:Expense[],period:ReturnType<
   totals(values).forEach((value,index)=>{totalRow.getCell(6+index).value=value;});paintRow(totalRow,13,light,teal,true);totalRow.height=30;
   for(const col of [6,7,8])ws.getColumn(col).numFmt='#,##0';
   ws.pageSetup.printTitlesRow='1:8';
+  ws.pageSetup.printArea=`A1:M${totalRow.number}`;
   if(!values.length){ws.mergeCells(9,1,9,5);ws.getCell('A9').value='Sin boletas de este estado en el período.';ws.getCell('A9').font={italic:true,color:{argb:gray}};}
  }
  detail('Boletas aprobadas',approved,'ClepitAprobadas');detail('Pendientes y rechazadas',other,'ClepitPorRevisar');
