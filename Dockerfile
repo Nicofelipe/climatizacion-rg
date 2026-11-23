@@ -9,7 +9,7 @@ COPY mobile/ ./
 RUN npm run build:web
 
 FROM node:24-bookworm-slim AS api
-# msnodesqlv8 se compila contra unixODBC cuando no hay binario para esta versión de Node.
+# msnodesqlv8 (solo para Windows) se compila igual al instalar; necesita estas herramientas aquí, no en la imagen final.
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ unixodbc-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /src/backend
 COPY backend/package.json backend/package-lock.json ./
@@ -17,15 +17,8 @@ RUN npm ci --no-audit --no-fund
 COPY backend/ ./
 RUN npm run build && npm prune --omit=dev
 
+# En Linux la app usa mssql (JavaScript puro): no necesita controladores ODBC.
 FROM node:24-bookworm-slim
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl gnupg unixodbc \
- && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
- && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list \
- && apt-get update && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 \
- && apt-get purge -y gnupg && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
- # Reutiliza conexiones: cada consulta abre la suya y el saludo TLS es caro.
- && sed -i '/^\[ODBC\]/d;/^Pooling/d' /etc/odbcinst.ini && printf '[ODBC]\nPooling=Yes\n' >> /etc/odbcinst.ini && sed -i '/^\[ODBC Driver 18 for SQL Server\]/a CPTimeout=120' /etc/odbcinst.ini
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8080 TZ=America/Santiago \
     WEB_DIR=/app/web MIGRATIONS_DIR=/app/database/migrations RECEIPT_STORAGE_DIR=/app/data/receipts
 WORKDIR /app/backend

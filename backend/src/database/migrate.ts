@@ -8,8 +8,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import msnodesqlv8 from 'msnodesqlv8';
-import { connectionString } from './sqlServer';
+import { executeBatch } from './sqlServer';
 
 const folder = process.env.MIGRATIONS_DIR ?? path.resolve(__dirname, '../../../database/migrations');
 const seeds = path.resolve(folder, '../seeds');
@@ -18,16 +17,7 @@ const BASELINE = 13;
 type Row = Record<string, unknown>;
 
 function run(sql: string, database?: string): Promise<Row[]> {
-  return new Promise((resolve, reject) => {
-    const rows: Row[] = [];
-    let done = false;
-    msnodesqlv8.query(connectionString({ database, admin: true }), sql, [], (error, result, more) => {
-      if (done) return;
-      if (error) { done = true; reject(error); return; }
-      rows.push(...((result ?? []) as Row[]));
-      if (!more) { done = true; resolve(rows); }
-    });
-  });
+  return executeBatch(sql, { database, admin: true });
 }
 
 /** Separa por GO y descarta USE: la base la decide DB_DATABASE. */
@@ -83,5 +73,6 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });
+  // Las conexiones abiertas no deben mantener vivo el proceso al terminar.
+  main().then(() => process.exit(0), error => { console.error(error instanceof Error ? error.message : error); process.exit(1); });
 }

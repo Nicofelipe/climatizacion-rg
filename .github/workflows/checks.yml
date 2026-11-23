@@ -79,4 +79,3 @@ jobs:
           docker run -d --name b -p 8080:8080 -e JWT_SECRET=verificacion-de-la-imagen-0000000000000 -e GOOGLE_CLIENT_ID=x -e GOOGLE_CLIENT_SECRET=x -e GOOGLE_REDIRECT_URI=http://localhost/cb clepit-boletas
           sleep 6
           curl -fsS http://localhost:8080/login | grep -q '<html' && curl -fsS http://localhost:8080/ocr/spa.traineddata.gz -o /dev/null
-          docker run --rm clepit-boletas node -e "require('msnodesqlv8')"
