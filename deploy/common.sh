@@ -9,7 +9,7 @@ DB=ClepitBoletas
 # La clave de administración se lee de la app Clepit y solo se usa en estos scripts.
 SA_PASSWORD=$(grep -E '^SA_PASSWORD=' "$CLEPIT_DEPLOY_DIR/.env" | cut -d= -f2-)
 clepit() { docker compose --project-directory "$CLEPIT_DEPLOY_DIR" -f "$CLEPIT_DEPLOY_DIR/docker-compose.yml" "$@"; }
-sql() { SQLCMDPASSWORD="$SA_PASSWORD" clepit exec -T -e SQLCMDPASSWORD db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b "$@"; }
+sql() { SQLCMDPASSWORD="$SA_PASSWORD" clepit exec -T -e SQLCMDPASSWORD db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b "$@" </dev/null; }
 db_exists() { sql -h -1 -W -Q "SET NOCOUNT ON; SELECT CASE WHEN DB_ID('$DB') IS NULL THEN 'no' ELSE 'si' END" | grep -q si; }
 
 # Usuario de la app: lee y escribe datos, no cambia tablas y no puede alterar el historial de auditoría.

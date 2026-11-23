@@ -6,7 +6,10 @@ src=$(realpath "${1:?Indica el archivo .bak}")
 source "$(dirname "$0")/common.sh"
 if db_exists; then
   echo "La base $DB YA EXISTE. Se respaldará y luego se reemplazará."
-  read -r -p "Escribe RESTAURAR para continuar: " ok; [[ "$ok" == RESTAURAR ]] || { echo "Cancelado."; exit 1; }
+  # Sin terminal se puede confirmar con CONFIRMAR=RESTAURAR.
+  ok=${CONFIRMAR:-}
+  [[ -n "$ok" ]] || read -r -p "Escribe RESTAURAR para continuar: " ok || true
+  [[ "$ok" == RESTAURAR ]] || { echo "Cancelado."; exit 1; }
   bash ./backup.sh
 fi
 docker compose stop boletas 2>/dev/null || true
