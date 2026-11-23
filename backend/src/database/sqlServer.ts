@@ -71,7 +71,8 @@ async function pool(options: ConnectionOptions) {
   const key = `${user}@${database}`;
   let existing = pools.get(key);
   if (!existing) {
-    const mssql = await import('mssql');
+    // Se carga solo en Linux; require evita el envoltorio de import() en CommonJS.
+    const mssql = require('mssql') as typeof import('mssql');
     const [server, port] = String(env.DB_SERVER).split(',');
     existing = new mssql.ConnectionPool({
       server, port: port ? Number(port) : 1433, database, user, password,
