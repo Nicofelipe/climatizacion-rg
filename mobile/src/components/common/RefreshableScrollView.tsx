@@ -1,5 +1,7 @@
+import { useWide } from '@/components/ui/kit';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, ScrollViewProps, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, ScrollViewProps, View } from 'react-native';
+import Text from '@/components/ui/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/theme';
 import { notifyDataRefresh } from '@/utils/refreshEvents';
@@ -7,6 +9,7 @@ import FormScrollView from './FormScrollView';
 import {ChartScrollContext} from './ChartEntrance';
 
 export function useWebPullRefresh(refreshing:boolean,onRefresh:()=>void){
+  const wide=useWide();
   const refresh=()=>{if(!refreshing){onRefresh();notifyDataRefresh();}};
   const y=useRef(0),start=useRef<number|null>(null),distance=useRef(0);
   const [ready,setReady]=useState(false);
@@ -17,7 +20,7 @@ export function useWebPullRefresh(refreshing:boolean,onRefresh:()=>void){
     onTouchEnd:()=>{if(start.current!==null&&distance.current>=75&&!refreshing)refresh();start.current=null;distance.current=0;setReady(false);},
     onTouchCancel:()=>{start.current=null;distance.current=0;setReady(false);},
   }:{};
-  const control=Platform.OS==='web'?<View style={{alignItems:'flex-end',paddingBottom:8}}><Pressable accessibilityRole="button" accessibilityLabel="Actualizar esta pantalla" disabled={refreshing} onPress={refresh} style={{flexDirection:'row',alignItems:'center',gap:7,padding:9}}>{refreshing?<ActivityIndicator size="small" color={Colors.primary}/>:<Ionicons name="refresh-outline" size={16} color={Colors.primary}/>}<Text style={{color:Colors.primary,fontSize:12,fontWeight:'600'}}>{refreshing?'Actualizando…':ready?'Suelta para actualizar':'Actualizar'}</Text></Pressable></View>:null;
+  const control=Platform.OS==='web'&&wide?<View style={{alignItems:'flex-end',marginTop:-6,marginRight:104,marginBottom:-36,zIndex:1}}><Pressable accessibilityRole="button" accessibilityLabel="Actualizar esta pantalla" disabled={refreshing} onPress={refresh} style={{flexDirection:'row',alignItems:'center',gap:7,padding:9}}>{refreshing?<ActivityIndicator size="small" color={Colors.primary}/>:<Ionicons name="refresh-outline" size={16} color={Colors.primary}/>}<Text style={{color:Colors.primary,fontSize:12,fontWeight:'600'}}>{refreshing?'Actualizando…':ready?'Suelta para actualizar':'Actualizar'}</Text></Pressable></View>:null;
   return {handlers,control,refresh};
 }
 

@@ -1,0 +1,56 @@
+# Clepit Gestión de Boletas en el servidor que ya usa Clepit (Hetzner).
+# Se suma a la red interna existente: usa su SQL Server ("db") y su Caddy. No publica puertos ni toca la otra app.
+# Variables en deploy/.env (ver .env.example).
+
+name: clepit-boletas
+
+services:
+  boletas:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: clepit-boletas:latest
+    restart: unless-stopped
+    init: true
+    mem_limit: 512m
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=320"
+      DB_SERVER: "db,1433"
+      DB_DATABASE: "ClepitBoletas"
+      DB_USER: "boletas_app"
+      DB_PASSWORD: ${BOLETAS_DB_PASSWORD:?Falta BOLETAS_DB_PASSWORD en deploy/.env}
+      # La red es interna del servidor; el certificado de SQL Server es autofirmado.
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      TRUSTED_PROXIES: "172.30.0.0/24"
+      CORS_ALLOWED_ORIGINS: "https://${BOLETAS_DOMAIN:?Falta BOLETAS_DOMAIN}"
+      JWT_SECRET: ${JWT_SECRET:?Falta JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:?Falta STORAGE_ENCRYPTION_KEY}
+      RECEIPT_STORAGE: ${RECEIPT_STORAGE:-drive}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Falta GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Falta GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: "https://${BOLETAS_DOMAIN}/api/storage/google-drive/callback"
+      GOOGLE_LOGIN_REDIRECT_URI: "https://${BOLETAS_DOMAIN}/api/auth/google/callback"
+      GOOGLE_LOGIN_APP_REDIRECTS: "https://${BOLETAS_DOMAIN}/google-login,climatizacion-rg://google-login"
+      PASSWORD_RESET_URL: "https://${BOLETAS_DOMAIN}/reset-password"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_SERVICE_ACCOUNT_FILE: "/app/secrets/fcm-service-account.json"
+    volumes:
+      - ./data/receipts:/app/data/receipts
+      - ./data/secrets:/app/secrets:ro
+      # APK para instalar en los teléfonos: https://boletas.clepit.cl/descargas/
+      - ./data/downloads:/app/web/descargas:ro
+    networks:
+      clepit:
+        aliases: [boletas]
+
+networks:
+  clepit:
+    name: clepit_internal
+    external: true

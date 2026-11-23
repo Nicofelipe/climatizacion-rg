@@ -1,120 +1,110 @@
 import { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-
-import DashboardPeriodSelector from './DashboardPeriodSelector';
-import { ExpenseDonut, ExpenseLine, percent } from './ReportCharts';
-import ExpenseScopeSelector from './ExpenseScopeSelector';
-import RefreshableScrollView from './RefreshableScrollView';
-import { availablePeriodOptions } from '@/utils/periodOptions';
-import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { API_URL, authorized, requestJson } from '@/api/http';
+import Button from '@/components/ui/Button';
+import Text from '@/components/ui/Text';
+import { Banner, Card, IconTile, ScreenHeader, SectionTitle, Segmented, styles as kit, tones, useWide } from '@/components/ui/kit';
+import { typeName } from '@/constants/expenseTypes';
 import { useAuth } from '@/hooks/useAuth';
-import { formatCurrency } from '@/utils/currency';
+import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
 import { Colors } from '@/theme';
-import {requestJson} from '@/api/http';
-import {saveReport} from '@/utils/saveReport';
-
-const stateDesign = [
-  { status: 'APPROVED', label: 'Aprobadas', color: '#16A34A', background: '#DCFCE7', icon: 'checkmark-circle-outline' },
-  { status: 'PENDING', label: 'Pendientes', color: '#D99A16', background: '#FEF3C7', icon: 'time-outline' },
-  { status: 'REJECTED', label: 'Rechazadas', color: '#DC2626', background: '#FEE2E2', icon: 'close-circle-outline' },
-] as const;
-const labelMonth = (value: string) => new Date(`${value}-15T12:00:00Z`).toLocaleDateString('es-CL', { month: 'short', timeZone: 'America/Santiago' });
+import { formatCurrency } from '@/utils/currency';
+import { monthLabel, readableDate } from '@/utils/dates';
+import { availablePeriodOptions } from '@/utils/periodOptions';
+import { saveReport } from '@/utils/saveReport';
+import DashboardPeriodSelector from './DashboardPeriodSelector';
+import { BudgetMeter, CategoryBars } from './ExpenseCharts';
+import ExpenseScopeSelector, { ExpenseScope } from './ExpenseScopeSelector';
+import { statusDesign } from './ExpenseStatus';
+import RefreshableScrollView from './RefreshableScrollView';
+import { ExpenseDonut, ExpenseLine, percent, percentText } from './ReportCharts';
 
 export default function ReportsOverview() {
   const { token, user } = useAuth();
   const [period, setPeriod] = useState(() => availablePeriodOptions(0).currentPeriod);
   const [mode, setMode] = useState<'month' | 'year'>('month');
-  const [chartMode, setChartMode] = useState<'daily' | 'monthly'>('daily');
-  const [scope,setScope]=useState<'personal'|'company'>('company');
-  const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
-  async function downloadExcel(){
-    if(!token||exporting)return;setExporting(true);setExportError('');
-    try{
-      const query=`year=${period.slice(0,4)}${mode==='month'?`&month=${period.slice(5,7)}`:''}&scope=${scope}`;
-      const result=await requestJson(`${process.env.EXPO_PUBLIC_API_URL}/reports/expenses?${query}`,{headers:{Authorization:`Bearer ${token}`}},60000);
-      await saveReport(result.filename,result.base64,result.mimeType);
-    }catch(error){setExportError(error instanceof Error?error.message:'No fue posible descargar el Excel.');}
-    finally{setExporting(false);}
+  const [chart, setChart] = useState<'daily' | 'monthly'>('daily');
+  const [scope, setScope] = useState<ExpenseScope>('company');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const { data, loading, error, reload } = useExpenseDashboard(token, period, mode, scope);
+  const wide = useWide();
+  const admin = user?.role === 'ADMIN';
+  const company = admin && scope === 'company';
+
+  async function downloadExcel() {
+    if (!token || exporting) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const query = `year=${period.slice(0, 4)}${mode === 'month' ? `&month=${period.slice(5, 7)}` : ''}&scope=${scope}`;
+      const result = await requestJson(`${API_URL}/reports/expenses?${query}`, { headers: authorized(token) }, 60000);
+      await saveReport(result.filename, result.base64, result.mimeType);
+    } catch (failure) { setExportError(failure instanceof Error ? failure.message : 'No fue posible descargar el Excel.'); }
+    finally { setExporting(false); }
   }
-  const { data, loading, error, reload } = useExpenseDashboard(token, period, mode,scope);
-  const wide = useWindowDimensions().width >= 900;
-  const approved = data?.states.find(item => item.status === 'APPROVED');
+
   const counted = data?.states.filter(item => item.status !== 'REJECTED').reduce((sum, item) => sum + item.count, 0) ?? 0;
-  const compareMonths = mode === 'year' || chartMode === 'monthly';
-  const points = data ? compareMonths ? data.trend.map(item => ({ key: item.month, label: labelMonth(item.month), description: new Date(`${item.month}-15T12:00:00Z`).toLocaleDateString('es-CL', { month: 'long', year: 'numeric', timeZone: 'America/Santiago' }), amount: item.amount }))
-    : data.daily.map(item => ({ key: item.date, label: item.date.slice(8), description: item.date.split('-').reverse().join('/'), amount: item.amount })) : [];
-  const peak = points.reduce<(typeof points)[number] | null>((best, point) => point.amount > (best?.amount ?? 0) ? point : best, null);
-  const peakTies = peak ? points.filter(point => point.amount === peak.amount).length : 0;
+  const approved = data?.states.find(item => item.status === 'APPROVED')?.count ?? 0;
+  const monthly = mode === 'year' || chart === 'monthly';
+  const points = !data ? [] : monthly
+    ? data.trend.map(item => ({ key: item.month, label: monthLabel(item.month, true), description: monthLabel(item.month), amount: item.amount }))
+    : data.daily.map(item => ({ key: item.date, label: item.date.slice(8), description: readableDate(item.date), amount: item.amount }));
+  const grid = { flexDirection: wide ? 'row' : 'column', gap: 18, alignItems: 'stretch' } as const;
+  const column = wide ? { flex: 1 } : undefined;
 
-  return <View style={styles.page}>
-    <RefreshableScrollView contentContainerStyle={styles.content} refreshing={loading} onRefresh={reload}>
-      <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.eyebrow}>TUS NÚMEROS, CON CLARIDAD</Text><Text style={styles.title}>Reportes</Text></View><View style={styles.headerIcon}><Ionicons name="analytics-outline" size={27} color={Colors.primary} /></View></View>
-      <Text style={styles.subtitle}>{user?.role === 'ADMIN' ? 'Una mirada completa a los gastos de tu empresa.' : 'Entiende cómo se distribuyen tus gastos y cómo cambian en el tiempo.'}</Text>
-      {user?.role==='ADMIN'?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}
-      <View style={[styles.row, { alignItems: 'flex-start', flexWrap: 'wrap', gap: 18 }]}>
-        <View style={{ gap: 12 }}><View style={styles.segment}>{([{ value: 'month', label: 'Mensual' }, { value: 'year', label: 'Anual' }] as const).map(item => <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === item.value }} key={item.value} onPress={() => setMode(item.value)} style={[styles.segmentOption, mode === item.value && { backgroundColor: 'white' }]}><Text style={{ color: mode === item.value ? Colors.primary : Colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{item.label}</Text></Pressable>)}</View><DashboardPeriodSelector value={period} onChange={setPeriod} hideMonth={mode === 'year'} /></View>
-        <View style={styles.scope}><Ionicons name={user?.role === 'ADMIN'&&scope==='company' ? 'people-outline' : 'person-outline'} size={14} color={Colors.primary} /><Text style={styles.scopeText}>{user?.role === 'ADMIN'&&scope==='company' ? 'Toda tu empresa, incluyéndote' : 'Solo tus boletas'}</Text></View>
+  return <View style={kit.page}>
+    <RefreshableScrollView contentContainerStyle={kit.content} refreshing={loading} onRefresh={reload}>
+      <ScreenHeader title="Reportes" subtitle="Según la fecha de la boleta. Incluye pendientes y aprobadas; las rechazadas no cuentan."
+        right={admin && wide ? <Button icon="download-outline" title={exporting ? 'Preparando…' : 'Descargar Excel'} loading={exporting} onPress={() => { void downloadExcel(); }} /> : undefined} />
+      <View style={[kit.wrap, { alignItems: 'center' }]}>
+        {admin ? <ExpenseScopeSelector value={scope} onChange={setScope} /> : null}
+        <Segmented label="Período" value={mode} onChange={setMode} options={[{ value: 'month', label: 'Mes' }, { value: 'year', label: 'Año' }]} />
+        <DashboardPeriodSelector value={period} onChange={setPeriod} hideMonth={mode === 'year'} />
       </View>
-      {error ? <View style={styles.panel}><Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{error}</Text><Pressable onPress={reload} accessibilityRole="button"><Text style={styles.link}>Reintentar →</Text></Pressable></View> : null}
-      {user?.role==='ADMIN'?<View style={styles.panel}><Pressable accessibilityRole="button" disabled={exporting} onPress={()=>{void downloadExcel();}} style={{flexDirection:'row',gap:10,alignItems:'center'}}>{exporting?<ActivityIndicator color={Colors.primary}/>:<Ionicons name="download-outline" size={23} color={Colors.primary}/>}<Text style={{color:Colors.primary,fontWeight:'700'}}>{exporting?'Preparando Excel…':`Descargar Excel ${mode==='year'?'anual':'mensual'}`}</Text></Pressable><Text style={styles.caption}>Resumen, boletas aprobadas y una hoja separada de pendientes y rechazadas. Año de enero a diciembre, según la fecha de la boleta.</Text>{exportError?<Text accessibilityRole="alert" style={{color:'#B91C1C'}}>{exportError}</Text>:null}</View>:null}
-      {loading ? <View style={styles.panel}><ActivityIndicator color={Colors.primary} /><Text style={styles.subtitle}>Preparando tus gráficos…</Text></View> : data ? <>
-        <View style={styles.kpis}>
-          <View style={[styles.kpi, styles.darkKpi]}><Text style={styles.darkLabel}>{user?.role==='ADMIN'&&scope==='company'?'GASTO DE LA EMPRESA':'MI GASTO DEL PERÍODO'}</Text><Text style={styles.darkValue}>{formatCurrency(data.total)}</Text><Text style={styles.darkHint}>{mode === 'year' ? data.periodLabel : new Date(`${period}-15T12:00:00Z`).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}</Text><Text style={styles.darkHint}>{counted} boletas pendientes y aprobadas · sin rechazadas</Text></View>
-          <View style={styles.kpi}><View style={styles.smallIcon}><Ionicons name="receipt-outline" size={20} color={Colors.primary} /></View><Text style={styles.kpiValue}>{formatCurrency(counted ? Math.round(data.total / counted) : 0)}</Text><Text style={styles.kpiLabel}>Promedio por boleta</Text><Text style={styles.caption}>Pendientes y aprobadas</Text></View>
-          <View style={styles.kpi}><View style={[styles.smallIcon, { backgroundColor: '#EDE9FE' }]}><Ionicons name="checkmark-done-outline" size={20} color="#7C3AED" /></View><Text style={styles.kpiValue}>{percent(approved?.count ?? 0, data.receiptCount)}%</Text><Text style={styles.kpiLabel}>Boletas aprobadas</Text><Text style={styles.caption}>{approved?.count ?? 0} de {data.receiptCount} registros del período</Text></View>
+      {admin && !wide ? <Button icon="download-outline" variant="secondary" title={`Descargar Excel ${mode === 'year' ? 'anual' : 'del mes'}`} loading={exporting} onPress={() => { void downloadExcel(); }} /> : null}
+      {exportError ? <Banner tone="danger">{exportError}</Banner> : null}
+      {error ? <Banner tone="danger" action={<Button compact variant="secondary" title="Reintentar" onPress={reload} style={{ alignSelf: 'flex-start' }} />}>{error}</Banner> : null}
+      {loading && !data ? <Card style={{ alignItems: 'center', paddingVertical: 60 }}><ActivityIndicator color={Colors.primary} /></Card> : data ? <>
+        <View style={kit.wrap}>
+          {([
+            ['wallet-outline', company ? 'Gasto de la empresa' : 'Mi gasto', formatCurrency(data.total), mode === 'year' ? data.periodLabel : monthLabel(period)],
+            ['receipt-outline', 'Promedio por boleta', formatCurrency(counted ? Math.round(data.total / counted) : 0), `${counted} ${counted === 1 ? 'boleta' : 'boletas'}`],
+            ['calculator-outline', 'IVA del período', formatCurrency(data.vat), `${formatCurrency(data.net)} sin IVA`],
+            ['checkmark-done-outline', 'Aprobadas', percentText(percent(approved, data.receiptCount)), `${approved} de ${data.receiptCount}`],
+          ] as const).map(([icon, label, value, hint]) => <Card key={label} style={s.kpi}><View style={kit.row}><IconTile icon={icon} size={34} /><Text style={{ fontSize: 13, fontWeight: '600', color: Colors.textSecondary, flex: 1 }}>{label}</Text></View><Text adjustsFontSizeToFit numberOfLines={1} style={s.value}>{value}</Text><Text style={kit.caption}>{hint}</Text></Card>)}
         </View>
 
-        <View style={styles.panel}>
-          <View style={styles.row}><View style={{ flex: 1 }}><Text style={styles.panelTitle}>{compareMonths ? 'Compara tus meses' : 'El pulso de tu mes'}</Text><Text style={styles.caption}>{mode === 'year' ? 'Meses del año seleccionado · hasta el período disponible' : compareMonths ? 'Últimos seis meses hasta el mes seleccionado' : 'Gasto por día · los días sin registros aparecen en cero'}</Text></View><View style={styles.chartIcon}><Ionicons name="trending-up-outline" size={21} color={Colors.primary} /></View></View>
-          {mode === 'month' ? <View style={styles.segment}>{([{ value: 'daily', label: 'Por día' }, { value: 'monthly', label: 'Entre meses' }] as const).map(item => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: chartMode === item.value }} onPress={() => setChartMode(item.value)} style={[styles.segmentOption, chartMode === item.value && { backgroundColor: 'white' }]}><Text style={{ color: chartMode === item.value ? Colors.primary : Colors.textSecondary, fontWeight: '700', fontSize: 13 }}>{item.label}</Text></Pressable>)}</View> : null}
-          <Text style={styles.caption}>Según la fecha de la boleta, independiente de cuándo la registraste.</Text>
-          <ExpenseLine key={`${mode}-${period}-${chartMode}`} points={points} />
-          {compareMonths ? <View style={styles.insight}><Ionicons name="podium-outline" size={20} color={Colors.primary} /><Text style={styles.insightText}>{peak ? peakTies > 1 ? `${peakTies} meses comparten el mayor gasto: ${formatCurrency(peak.amount)} cada uno.` : `Mayor gasto: ${peak.description}, con ${formatCurrency(peak.amount)}.` : 'Aún no hay gastos en los meses comparados.'}</Text></View> : null}
-          <View style={styles.insight}><Ionicons name="information-circle-outline" size={20} color={Colors.primary} /><Text style={styles.insightText}>{data.changePercent === null ? 'No hay gasto en el período anterior para calcular una variación porcentual.' : `El gasto cambió ${data.changePercent > 0 ? '+' : ''}${data.changePercent}% respecto al ${data.comparisonLabel}.`}</Text></View>
+        <Card>
+          <SectionTitle title="Evolución del gasto" caption={data.changePercent === null ? `Sin gasto en el ${data.comparisonLabel} para comparar` : `${data.changePercent > 0 ? '+' : ''}${data.changePercent}% que el ${data.comparisonLabel} (${formatCurrency(data.previousTotal)})`}
+            action={mode === 'month' ? <Segmented label="Detalle" value={chart} onChange={setChart} options={[{ value: 'daily', label: 'Días' }, { value: 'monthly', label: 'Meses' }]} /> : undefined} />
+          <ExpenseLine key={`${mode}-${period}-${chart}`} points={points} />
+        </Card>
+
+        <View style={grid}>
+          <Card style={column}><SectionTitle title="Por tipo de gasto" caption="Toca un tipo para ver su porcentaje" /><ExpenseDonut key={`${mode}-${period}-${scope}`} categories={data.categories.map(item => ({ ...item, name: typeName(item.name) }))} total={data.total} /></Card>
+          <Card style={column}>
+            <SectionTitle title="Estado de las boletas" caption="Sobre la cantidad de registros" />
+            <View style={s.track}>{data.states.map(item => <View key={item.status} style={{ height: 12, width: `${percent(item.count, data.receiptCount)}%`, backgroundColor: item.status === 'PENDING' ? Colors.sunny : tones[statusDesign[item.status].tone].ink }} />)}</View>
+            {data.states.map(item => { const design = statusDesign[item.status]; return <View key={item.status} style={kit.row}>
+              <IconTile icon={design.icon} tone={design.tone} size={36} /><View style={{ flex: 1 }}><Text style={{ fontWeight: '600', fontSize: 14 }}>{design.plural}</Text><Text style={kit.caption}>{item.count} · {formatCurrency(item.amount)}</Text></View>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: tones[design.tone].ink }}>{percentText(percent(item.count, data.receiptCount))}</Text>
+            </View>; })}
+            <View style={{ borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 14, gap: 10 }}><Text style={kit.sectionTitle}>Presupuesto</Text><BudgetMeter budget={data.budget} admin={admin} /></View>
+          </Card>
         </View>
 
-        <View style={[styles.grid, { flexDirection: wide ? 'row' : 'column' }]}>
-          <View style={[styles.panel, wide && { flex: 1 }]}><Text style={styles.panelTitle}>¿Dónde se va el gasto?</Text><Text style={styles.caption}>Participación de cada tipo sobre el monto total. Toca un segmento o su leyenda.</Text><ExpenseDonut key={`${mode}-${period}`} categories={data.categories} total={data.total} /></View>
-          <View style={[styles.panel, wide && { flex: 1 }]}>
-            <Text style={styles.panelTitle}>Estado de tus boletas</Text><Text style={styles.caption}>Porcentaje sobre la cantidad de registros, no sobre su monto.</Text>
-            <View style={styles.stateTrack}>{stateDesign.map(item => {
-              const state = data.states.find(value => value.status === item.status);
-              return <View key={item.status} style={{ width: `${data.receiptCount ? (state?.count ?? 0) / data.receiptCount * 100 : 0}%`, backgroundColor: item.color, height: 13 }} />;
-            })}</View>
-            {stateDesign.map(item => {
-              const state = data.states.find(value => value.status === item.status);
-              const share = percent(state?.count ?? 0, data.receiptCount);
-              return <View key={item.status} style={styles.stateRow}><View style={[styles.smallIcon, { backgroundColor: item.background }]}><Ionicons name={item.icon} size={20} color={item.color} /></View><View style={{ flex: 1, gap: 5 }}><Text style={styles.kpiLabel}>{item.label}</Text><Text style={styles.caption}>{state?.count ?? 0} boleta{state?.count !== 1 ? 's' : ''} · {formatCurrency(state?.amount ?? 0)}</Text></View><Text style={[styles.statePercent, { color: item.color }]}>{share}%</Text></View>;
-            })}
-            {!data.receiptCount ? <Text style={styles.caption}>Aún no hay boletas en este período.</Text> : null}
-            <View style={styles.insight}><Ionicons name="bulb-outline" size={20} color={Colors.primary} /><Text style={styles.insightText}>{data.categories[0] ? `${data.categories[0].name} concentra el ${percent(data.categories[0].amount, data.total)}% del gasto registrado.` : 'Cuando registres boletas, aquí verás qué categoría concentra tus gastos.'}</Text></View>
-          </View>
+        <View style={grid}>
+          <Card style={column}><SectionTitle title="Comercios con más gasto" caption="Boletas con comercio registrado" /><CategoryBars groups={data.suppliers} total={data.total} empty="Aún no hay boletas con comercio registrado." /></Card>
+          {company ? <Card style={column}><SectionTitle title="Gasto por persona" /><CategoryBars groups={data.workers} total={data.total} /></Card> : null}
         </View>
-
-        <View style={styles.budget}>
-          <View style={styles.headerIcon}><Ionicons name="wallet-outline" size={26} color={Colors.primary} /></View>
-          <View style={{ flex: 1, gap: 7 }}><Text style={styles.panelTitle}>Gasto frente al presupuesto</Text><Text style={styles.caption}>Sin presupuesto configurado</Text><Text style={styles.subtitle}>El porcentaje utilizado y el saldo disponible se mostrarán cuando exista un monto asignado por la empresa. Tu gasto actual es {formatCurrency(data.total)}.</Text></View>
-        </View>
-        <Text style={styles.footnote}>Montos en CLP · gasto incluye pendientes y aprobadas; excluye rechazadas.{ '\n' }{data.companyName} · {data.scope === 'personal' ? 'Información de tus propias boletas' : 'Información de tu empresa'}</Text>
       </> : null}
     </RefreshableScrollView>
   </View>;
 }
 
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: Colors.background }, content: { width: '100%', maxWidth: 1120, alignSelf: 'center', padding: 20, paddingBottom: 36, gap: 24 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  eyebrow: { fontSize: 10, color: Colors.textSecondary, fontWeight: '700', letterSpacing: 1.5, marginBottom: 10 }, title: { color: Colors.text, fontWeight: '800', fontSize: 32, letterSpacing: -1 }, subtitle: { color: Colors.textSecondary, fontSize: 13, lineHeight: 22 },
-  headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E0F2F1' },
-  segment: { flexDirection: 'row', alignSelf: 'flex-start', padding: 4, borderRadius: 12, backgroundColor: '#E9EEF7', gap: 4 }, segmentOption: { paddingVertical: 9, paddingHorizontal: 20, borderRadius: 9 },
-  scope: { flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: '#E1F5EF', borderRadius: 20, padding: 10 }, scopeText: { color: Colors.primary, fontWeight: '600', fontSize: 12 },
-  kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 }, kpi: { flex: 1, minWidth: 220, padding: 16, backgroundColor: 'white', borderRadius: 16, borderColor: Colors.border, borderWidth: 1, gap: 7 }, darkKpi: { backgroundColor: '#17233D', borderColor: '#17233D', justifyContent: 'center' },
-  darkLabel: { color: '#ADC0DE', fontSize: 10, letterSpacing: 1.5, fontWeight: '700' }, darkValue: { color: 'white', fontSize: 34, fontWeight: '800', letterSpacing: -1 }, darkHint: { color: '#B8C8DE', fontSize: 12, textTransform: 'capitalize' },
-  smallIcon: { backgroundColor: '#E1F5EF', width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }, kpiValue: { color: Colors.text, fontWeight: '800', fontSize: 27, letterSpacing: -0.7 }, kpiLabel: { color: Colors.text, fontWeight: '600', fontSize: 13 }, caption: { color: Colors.textSecondary, fontSize: 12, lineHeight: 20 },
-  panel: { backgroundColor: 'white', borderRadius: 22, borderWidth: 1, borderColor: Colors.border, padding: 22, gap: 18 }, panelTitle: { color: Colors.text, fontSize: 19, fontWeight: '700', letterSpacing: -0.4 }, chartIcon: { backgroundColor: '#E1F5EF', borderRadius: 12, padding: 10 },
-  grid: { gap: 16 }, insight: { backgroundColor: '#F0F9F6', padding: 14, borderRadius: 13, flexDirection: 'row', alignItems: 'center', gap: 10 }, insightText: { color: '#276052', fontSize: 12, lineHeight: 20, flex: 1 },
-  stateTrack: { height: 13, backgroundColor: '#F1F5F9', borderRadius: 7, overflow: 'hidden', flexDirection: 'row', marginVertical: 9 }, stateRow: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 10 }, statePercent: { fontSize: 23, fontWeight: '800' },
-  budget: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, borderWidth: 1, borderColor: '#CDE3DD', borderRadius: 22, backgroundColor: '#F0F9F6', padding: 22 },
-  footnote: { color: '#7C899D', textAlign: 'center', fontSize: 11, lineHeight: 19 }, link: { color: Colors.primary, fontWeight: '700' },
+const s = StyleSheet.create({
+  kpi: { flex: 1, minWidth: 200, gap: 6, padding: 16 },
+  value: { fontSize: 25, lineHeight: 32, fontWeight: '800', letterSpacing: -0.5 },
+  track: { height: 12, borderRadius: 6, overflow: 'hidden', flexDirection: 'row', backgroundColor: '#EBF2F2' },
 });

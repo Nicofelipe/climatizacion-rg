@@ -1,7 +1,7 @@
 require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8');
 process.env.STORAGE_ENCRYPTION_KEY='a'.repeat(64);
-const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs=require('./fixtures/connection.cjs');
 let role='ADMIN',company=3,version=0,saved;
 const db=require.resolve('../src/database/sqlServer.ts');require.cache[db]={id:db,filename:db,loaded:true,exports:{executeQuery:(sql,params)=>new Promise((resolve,reject)=>{
  const fixture=`SET NOCOUNT ON;

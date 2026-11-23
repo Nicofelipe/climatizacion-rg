@@ -1,7 +1,7 @@
 // Real SQL query against connection-local temporary tables only.
 require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8');
-const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs=require('./fixtures/connection.cjs');
 let multiple=false,active=1;
 const fixture=()=>`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);

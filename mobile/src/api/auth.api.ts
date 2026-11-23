@@ -1,7 +1,6 @@
 import { LoginRequest, LoginResponse } from '@/types/auth';
-import { requestJson } from './http';
+import { API_URL, requestJson } from './http';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export async function loginApi(
   data: LoginRequest

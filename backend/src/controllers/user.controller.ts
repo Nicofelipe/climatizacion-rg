@@ -12,7 +12,7 @@ export async function createEmployeeController(
     try {
         if (!req.user) {
             res.status(401).json({
-                message: 'Authentication required',
+                message: 'Debes iniciar sesión.',
             });
             return;
         }
@@ -45,7 +45,7 @@ export async function createEmployeeController(
             !password
         ) {
             res.status(400).json({
-                message: 'Missing required fields',
+                message: 'Completa nombre, apellido, correo y contraseña.',
             });
             return;
         }
@@ -79,7 +79,7 @@ export async function createEmployeeController(
         });
 
         res.status(201).json({
-            message: 'Employee created successfully',
+            message: 'Integrante registrado.',
             employee,
         });
     } catch (error) {
@@ -88,7 +88,7 @@ export async function createEmployeeController(
             error.message.includes('EMAIL_ALREADY_EXISTS')
         ) {
             res.status(409).json({
-                message: 'Email already exists',
+                message: 'Ese correo ya está registrado.',
             });
             return;
         }
@@ -101,7 +101,7 @@ export async function createEmployeeController(
         );
 
         res.status(500).json({
-            message: 'Internal server error',
+            message: 'No fue posible registrar al integrante.',
         });
     }
 }

@@ -46,3 +46,5 @@ example
 .env
 
 backend/uploads/
+# Se copia desde node_modules (scripts/copy-ocr.cjs)
+public/ocr/

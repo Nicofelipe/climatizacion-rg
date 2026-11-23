@@ -12,14 +12,14 @@ export function requireRole(...allowedRoles: string[]) {
 
     if (!role) {
       res.status(401).json({
-        message: 'Authentication required',
+        message: 'Debes iniciar sesión.',
       });
       return;
     }
 
     if (!allowedRoles.includes(role)) {
       res.status(403).json({
-        message: 'You do not have permission to access this resource',
+        message: 'Tu cuenta no tiene permiso para esta acción.',
       });
       return;
     }

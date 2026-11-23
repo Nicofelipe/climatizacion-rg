@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),express=r
 let user,saved;
 for(const [name,exports] of [
  ['../src/middlewares/auth.middleware.ts',{authenticateToken:(req,res,next)=>{if(!user){res.sendStatus(401);return;}req.user=user;next();}}],
- ['../src/services/expense.service.ts',{getExpenses:async(...args)=>{saved=args;return [];}}],
+ ['../src/services/expense.service.ts',{getExpenses:async(...args)=>{saved=args.slice(0,3);assert.deepEqual(args[3],{from:'2026-01-01',to:'2026-12-31'});return [];}}],
  ['../src/database/sqlServer.ts',{executeQuery:async(_sql,params)=>{assert.deepEqual(params,[3]);return [{Name:'Empresa de prueba'}];}}],
 ]){const file=require.resolve(name);require.cache[file]={id:file,filename:file,loaded:true,exports};}
 const router=require('../src/routes/report.routes.ts').default;

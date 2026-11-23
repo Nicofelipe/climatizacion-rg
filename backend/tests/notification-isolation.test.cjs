@@ -1,7 +1,7 @@
 // Execute the actual inbox SQL against connection-local temporary tables only.
 require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8');
-const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs=require('./fixtures/connection.cjs');
 const fixture=`SET NOCOUNT ON;
  CREATE TABLE #Expense(Id int,CompanyId int,IsDeleted bit,Status nvarchar(20));
  CREATE TABLE #UserNotification(Id int,CompanyId int,UserId int,ExpenseId int,Kind nvarchar(30),CreatedAt datetime2 DEFAULT SYSUTCDATETIME(),ReadAt datetime2);

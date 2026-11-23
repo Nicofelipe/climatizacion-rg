@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Redirect, router } from 'expo-router';
-import { Linking, ScrollView, Text } from 'react-native';
+import { Linking, ScrollView } from 'react-native';
+import Text from '@/components/ui/Text';
 import AppContainer from '@/components/layout/AppContainer';
 import Button from '@/components/ui/Button';
-import { requestJson } from '@/api/http';
+import { API_URL, requestJson } from '@/api/http';
 import { useAuth } from '@/hooks/useAuth';
 import { Colors, Spacing } from '@/theme';
 import RefreshableScrollView from '@/components/common/RefreshableScrollView';
@@ -20,7 +21,7 @@ export default function StorageScreen() {
     if (!token || user?.role !== 'ADMIN') return;
     let active = true;
     setLoading(true);
-    requestJson(`${process.env.EXPO_PUBLIC_API_URL}/storage`, {
+    requestJson(`${API_URL}/storage`, {
       headers: { Authorization: `Bearer ${token}` },
     }).then(result => {
       if (active) setFolderId(result.storage?.RootFolderId ?? null);
@@ -37,7 +38,7 @@ export default function StorageScreen() {
     setMessage('');
     try {
       const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const base = `${process.env.EXPO_PUBLIC_API_URL}/storage`;
+      const base = `${API_URL}/storage`;
       if (action === 'connect') {
         const result = await requestJson(`${base}/google-drive/connect`, { headers });
         setAuthorizationUrl(result.authorizationUrl);
@@ -60,12 +61,12 @@ export default function StorageScreen() {
         {folderId ? <Text selectable style={{ color: Colors.textSecondary }}>Identificador: {folderId}</Text> : null}
         <Text style={{color:Colors.textSecondary,fontSize:13,lineHeight:21}}>Si las fotos se guardan correctamente, no necesitas renovar nada. Primero comprueba la conexión. Solo si el acceso venció, renuévalo e inicia sesión en Google con la cuenta dueña del respaldo.</Text>
         <Button title={busy?'Comprobando…':'Comprobar acceso a la carpeta'} onPress={() => run('test')} disabled={busy || loading || !folderId} />
-        <Button title="Renovar permiso de Google" onPress={() => run('connect')} disabled={busy || loading || !folderId} />
+        <Button variant="secondary" title="Renovar permiso de Google" onPress={() => run('connect')} disabled={busy || loading || !folderId} />
         {authorizationUrl ? <Button title="Autorizar en Google" onPress={() => {
           Linking.openURL(authorizationUrl).catch(() => setMessage('No fue posible abrir Google. Inténtalo nuevamente.'));
         }} /> : null}
         {message ? <Text accessibilityRole="alert" style={{ color: Colors.text }}>{message}</Text> : null}
-        <Button title="Volver" onPress={() => router.back()} />
+        <Button variant="ghost" title="Volver" onPress={() => router.back()} />
       </RefreshableScrollView>
     </AppContainer>
   );

@@ -15,6 +15,7 @@ function stub(relativePath, exports) {
 }
 stub('../src/services/expense.service.ts', {
   finishExpenseSync:async()=>{},
+  expenseTypeVatDefault:async()=>'CALCULATED',
   createExpense: async () => { writes++; if(createFailure)throw createFailure; return { Id: 1 }; },
   getExpenseById: async () => ({ Id: 1, UserId:10, Status: 'APPROVED' }),
   rollbackCreatedExpense: async () => { rolledBack = true; },
@@ -26,7 +27,11 @@ stub('../src/services/googleDrive.service.ts', {
     return { id: 'test-image' };
   },
 });
+let imageUsed = false;
+stub('../src/services/supplier.service.ts', { parseSupplier: () => ({}), resolveSupplier: async () => null });
 stub('../src/services/file.service.ts', {
+  isReceiptImageUsed: async () => imageUsed,
+  getExpenseFile: async () => null,
   createExpenseFile: async () => { writes++; },
 });
 const { createExpenseController, updateExpenseController } =
@@ -73,6 +78,24 @@ test('receipt image validation and temporary file cleanup', async t => {
       uploadFailure = null;
       await fs.rm(folder, { recursive: true, force: true });
     }
+  });
+  await t.test('a photo that already backs another receipt is rejected before any write', async () => {
+    const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'rg-receipt-')), temporaryPath = path.join(folder, 'receipt.jpg');
+    try {
+      await fs.writeFile(temporaryPath, 'fixture'); writes = 0; imageUsed = true;
+      const res = response();
+      await createExpenseController({ user, body, file: { path: temporaryPath, filename: 'receipt.jpg', mimetype: 'image/jpeg' } }, res);
+      assert.equal(res.statusCode, 409); assert.equal(res.payload.code, 'RECEIPT_IMAGE_ALREADY_USED'); assert.equal(writes, 0);
+    } finally { imageUsed = false; await fs.rm(folder, { recursive: true, force: true }); }
+  });
+  await t.test('an impossible printed VAT is explained and never written', async () => {
+    const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'rg-receipt-')), temporaryPath = path.join(folder, 'receipt.jpg');
+    try {
+      await fs.writeFile(temporaryPath, 'fixture'); writes = 0;
+      const res = response();
+      await createExpenseController({ user, body: { ...body, vatAmount: '500' }, file: { path: temporaryPath, filename: 'receipt.jpg', mimetype: 'image/jpeg' } }, res);
+      assert.equal(res.statusCode, 400); assert.match(res.payload.message, /IVA/); assert.equal(writes, 0);
+    } finally { await fs.rm(folder, { recursive: true, force: true }); }
   });
   await t.test('missing image is rejected before SQL or Drive writes', async () => {
     writes = 0;

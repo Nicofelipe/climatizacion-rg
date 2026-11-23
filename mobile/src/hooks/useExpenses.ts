@@ -1,52 +1,53 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
+import { Expense, ExpenseFilters, ExpensePage, searchExpensesApi } from '@/api/expense.api';
 
-import type { Expense } from '@/api/expense.api';
-import { getExpenses } from '@/services/ExpenseService';
+const PAGE_SIZE = 25;
 
-export function useExpenses(token: string | null) {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const pending=useRef<AbortController|null>(null);
+/** Listado por páginas. Un filtro nuevo cancela la consulta anterior para no mezclar resultados. */
+export function useExpenses(token: string | null, filters: ExpenseFilters) {
+  const key = JSON.stringify(filters);
+  const [items, setItems] = useState<Expense[]>([]);
+  const [summary, setSummary] = useState<Pick<ExpensePage, 'states' | 'total'> | null>(null);
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState('');
+  const pending = useRef<AbortController | null>(null);
+  const focused = useRef(false);
 
-  const loadExpenses = useCallback(async () => {
+  const load = useCallback(async (next: number) => {
     pending.current?.abort();
-    const controller=new AbortController();pending.current=controller;
-    if (!token) {
-      setExpenses([]);
-      setIsLoading(false);
-      return;
-    }
-
+    if (!token) { setItems([]); setLoading(false); return; }
+    const controller = new AbortController();
+    pending.current = controller;
+    if (next === 1) setLoading(true); else setLoadingMore(true);
+    setError('');
     try {
-      setIsLoading(true);
-      setError(null);
-
-      const data = await getExpenses(token,controller.signal);
-
-      if(!controller.signal.aborted)setExpenses(data);
-    } catch (err) {
-      if(controller.signal.aborted)return;
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'No fue posible obtener las boletas'
-      );
+      const result = await searchExpensesApi(token, JSON.parse(key) as ExpenseFilters, next, PAGE_SIZE, controller.signal);
+      if (controller.signal.aborted) return;
+      setItems(current => next === 1 ? result.expenses : [...current, ...result.expenses.filter(item => !current.some(known => known.Id === item.Id))]);
+      setSummary({ states: result.states, total: result.total });
+      setPage(next);
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'No fue posible obtener las boletas.');
     } finally {
-      if(!controller.signal.aborted)setIsLoading(false);
+      if (!controller.signal.aborted) { setLoading(false); setLoadingMore(false); }
     }
-  }, [token]);
+  }, [token, key]);
 
+  // Al volver a la pantalla se actualiza; mientras está abierta, al cambiar un filtro.
   useFocusEffect(useCallback(() => {
-    loadExpenses();
-    return()=>pending.current?.abort();
-  }, [loadExpenses]));
+    focused.current = true;
+    void load(1);
+    return () => { focused.current = false; pending.current?.abort(); };
+  }, [load]));
+  useEffect(() => () => pending.current?.abort(), []);
 
+  const hasMore = summary !== null && items.length < summary.total;
   return {
-    expenses,
-    isLoading,
-    error,
-    reload: loadExpenses,
+    items, summary, loading, loadingMore, error, hasMore,
+    reload: () => { void load(1); },
+    loadMore: () => { if (hasMore && !loading && !loadingMore && !error) void load(page + 1); },
   };
 }

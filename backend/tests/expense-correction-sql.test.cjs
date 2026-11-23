@@ -1,21 +1,21 @@
 // Only connection-local temporary tables are changed.
 require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8');
-const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs=require('./fixtures/connection.cjs');
 const fixture=`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);
 CREATE TABLE #AppUser(Id int,CompanyId int,RoleId int,IsActive bit);
-CREATE TABLE #Expense(Id int,CompanyId int,ExpenseDate date,TotalAmount decimal(18,2),NetAmount decimal(18,2),VatAmount decimal(18,2),Status nvarchar(20),IsDeleted bit,DriveSyncPending bit,UpdatedAt datetime2);
+CREATE TABLE #Expense(Id int,CompanyId int,ExpenseDate date,TotalAmount decimal(18,2),NetAmount decimal(18,2),VatAmount decimal(18,2),VatSource nvarchar(12),TaxRate decimal(5,2),Status nvarchar(20),IsDeleted bit,DriveSyncPending bit,UpdatedAt datetime2);
 CREATE TABLE #AuditLog(Id int IDENTITY,CompanyId int,UserId int,Action nvarchar(100),Entity nvarchar(100),EntityId int,BeforeData nvarchar(max),AfterData nvarchar(max),Reason nvarchar(1000),CreatedAt datetime2);
 INSERT INTO #Role VALUES(1,N'ADMIN',1),(2,N'EMPLOYEE',1);
 INSERT INTO #AppUser VALUES(5,3,1,1),(6,3,2,1),(7,4,1,1);
-INSERT INTO #Expense VALUES(11,3,'2026-10-05',1190,1000,190,N'APPROVED',0,0,NULL);
+INSERT INTO #Expense VALUES(11,3,'2026-10-05',1190,1000,190,N'CALCULATED',19,N'APPROVED',0,0,NULL);
 `;
 const path=require.resolve('../src/database/sqlServer.ts');
 let receiptStatus='APPROVED';
 require.cache[path]={id:path,filename:path,loaded:true,exports:{executeQuery:(statement,params)=>new Promise((resolve,reject)=>{
  let isolated=statement.replaceAll('dbo.Expense','#Expense').replaceAll('dbo.AppUser','#AppUser').replaceAll('dbo.Role','#Role').replaceAll('dbo.AuditLog','#AuditLog');
- isolated=isolated.replace('SELECT ? AS Id;',`SELECT ? AS Id,e.Status,e.DriveSyncPending,a.UserId,a.Reason,a.BeforeData,a.AfterData FROM #Expense e JOIN #AuditLog a ON a.EntityId=e.Id;`);
+ isolated=isolated.replace('SELECT @Id AS Id;',`SELECT @Id AS Id,e.NetAmount,e.VatAmount,e.VatSource,e.TaxRate,e.Status,e.DriveSyncPending,a.UserId,a.Reason,a.BeforeData,a.AfterData FROM #Expense e JOIN #AuditLog a ON a.EntityId=e.Id;`);
  driver.query(cs,fixture+`UPDATE #Expense SET Status=N'${receiptStatus}';`+isolated,params,(err,rows)=>err?reject(err):resolve(rows));
 })}};
 const drivePath=require.resolve('../src/services/googleDrive.service.ts');require.cache[drivePath]={id:drivePath,filename:drivePath,loaded:true,exports:{moveExpenseFileInGoogleDrive:async()=>{}}};
@@ -25,6 +25,15 @@ test('admin correction saves snapshots, actor and reason while preserving approv
  const [row]=await correctExpense(input);assert.equal(row.Status,'APPROVED');assert.equal(row.UserId,5);assert.equal(row.DriveSyncPending,true);assert.equal(row.Reason,input.reason);
  assert.equal(JSON.parse(row.BeforeData).TotalAmount,1190);assert.equal(JSON.parse(row.AfterData).TotalAmount,2380);
  assert.equal(JSON.parse(row.AfterData).ExpenseDate,'2026-09-30');
+});
+test('the VAT source decides the corrected amounts',async()=>{
+ const run=async change=>(await correctExpense({...input,...change}))[0];
+ let row=await run({});assert.deepEqual([row.NetAmount,row.VatAmount,row.VatSource,row.TaxRate],[2000,380,'CALCULATED',19]);
+ row=await run({vatSource:'RECEIPT',vatAmount:120});assert.deepEqual([row.NetAmount,row.VatAmount,row.VatSource],[2260,120,'RECEIPT']);
+ row=await run({vatSource:'EXEMPT'});assert.deepEqual([row.NetAmount,row.VatAmount,row.TaxRate],[2380,0,0]);
+ row=await run({expenseDate:'2026-10-05',totalAmount:1190,vatSource:'EXEMPT'});assert.equal(row.VatAmount,0);assert.equal(row.DriveSyncPending,false);
+ await assert.rejects(correctExpense({...input,vatSource:'RECEIPT',vatAmount:999}),/VAT_INVALID/);
+ await assert.rejects(correctExpense({...input,expectedVatSource:'EXEMPT'}),/CORRECTION_CONFLICT/);
 });
 for(const [name,change,pattern] of [
  ['employee forbidden',{userId:6},/CORRECTION_FORBIDDEN/],['other company forbidden',{userId:7},/CORRECTION_FORBIDDEN/],

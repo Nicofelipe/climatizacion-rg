@@ -1,10 +1,15 @@
+import { Colors } from '@/theme';
 import { useState } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
-import Svg, { Circle, Defs, G, LinearGradient, Line, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
-import { dashboardPalette } from './DashboardOverview.styles';
+import { Platform, Pressable, View } from 'react-native';
+import Text from '@/components/ui/Text';
+import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
+import { chartPalette as dashboardPalette } from '@/theme/colors';
+import { fontFor } from '@/theme/typography';
 import { formatCurrency } from '@/utils/currency';
 import ChartEntrance from './ChartEntrance';
 
+const SANS = fontFor('500', 11);
+export const percentText = (value: number) => `${value.toLocaleString('es-CL', { maximumFractionDigits: 1 })}%`;
 export const percent = (value: number, total: number) => total > 0 ? Math.round(value / total * 1000) / 10 : 0;
 const chartPress=(handler:()=>void)=>Platform.OS==='web'?{onClick:handler}:{onPress:handler};
 
@@ -21,7 +26,7 @@ function DonutChart({categories,total,progress}:{categories:{name:string;amount:
   return <View style={{ gap: 22 }}>
     <View style={{ alignItems: 'center' }}>
       <Svg width={220} height={220} viewBox="0 0 220 220" accessibilityLabel="Distribución del monto por tipo de gasto">
-        <Circle cx={110} cy={110} r={radius} fill="none" stroke="#EEF2F7" strokeWidth={27} />
+        <Circle cx={110} cy={110} r={radius} fill="none" stroke={Colors.border} strokeWidth={27} />
         <G transform="rotate(-90 110 110)">{categories.map((category, index) => {
           if (category.amount <= 0) return null;
           const length = total > 0 ? category.amount / total * circumference * progress : 0;
@@ -30,15 +35,15 @@ function DonutChart({categories,total,progress}:{categories:{name:string;amount:
             strokeWidth={selected === index ? 35 : category.amount===largest ? 31 : 25} strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-start}
             opacity={selected === null || selected === index ? 1 : 0.45} {...chartPress(() => setSelected(selected === index ? null : index))} />;
         })}</G>
-        <SvgText x={110} y={105} textAnchor="middle" fill="#17233D" fontSize={25} fontWeight="700">{active ? `${percent(active.amount, total)}%` : total > 0 ? '100%' : '0%'}</SvgText>
-        <SvgText x={110} y={128} textAnchor="middle" fill="#64748B" fontSize={11}>{active ? 'del gasto del período' : 'gasto distribuido'}</SvgText>
+        <SvgText x={110} y={105} textAnchor="middle" fill={Colors.text} fontSize={26} fontFamily={fontFor('800', 26)}>{active ? percentText(percent(active.amount, total)) : total > 0 ? '100%' : '0%'}</SvgText>
+        <SvgText x={110} y={128} textAnchor="middle" fill={Colors.textMuted} fontSize={11} fontFamily={SANS}>{active ? 'del gasto del período' : 'gasto distribuido'}</SvgText>
       </Svg>
     </View>
-    {categories.length ? categories.map((category, index) => <Pressable key={category.name} accessibilityRole="button" accessibilityLabel={`${category.name}, ${percent(category.amount, total)} por ciento, ${formatCurrency(category.amount)}`} onPress={() => setSelected(selected === index ? null : index)} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', borderRadius: 12, padding: 10, backgroundColor: selected === index ? '#F1F5F9' : 'transparent' }}>
+    {categories.length ? categories.map((category, index) => <Pressable key={category.name} accessibilityRole="button" accessibilityLabel={`${category.name}, ${percent(category.amount, total)} por ciento, ${formatCurrency(category.amount)}`} onPress={() => setSelected(selected === index ? null : index)} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', borderRadius: 12, padding: 10, backgroundColor: selected === index ? Colors.surfaceMuted : 'transparent' }}>
       <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dashboardPalette[index % dashboardPalette.length] }} />
-      <View style={{ flex: 1, gap: 4 }}><Text style={{ fontSize: 13, color: '#334155', fontWeight: '600' }}>{category.name}</Text><Text style={{ fontSize: 11, color: '#64748B' }}>{category.count} boleta{category.count !== 1 ? 's' : ''}</Text></View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}><Text style={{ color: '#17233D', fontWeight: '700', fontSize: 13 }}>{formatCurrency(category.amount)}</Text><Text style={{ color: '#64748B', fontSize: 12 }}>{percent(category.amount, total)}%</Text></View>
-    </Pressable>) : <Text style={{ color: '#64748B', textAlign: 'center', lineHeight: 22 }}>No hay gastos para distribuir en este período.</Text>}
+      <View style={{ flex: 1, gap: 4 }}><Text style={{ fontSize: 13, color: Colors.text, fontWeight: '600' }}>{category.name}</Text><Text style={{ fontSize: 11, color: Colors.textMuted }}>{category.count} boleta{category.count !== 1 ? 's' : ''}</Text></View>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}><Text style={{ color: Colors.text, fontWeight: '700', fontSize: 13 }}>{formatCurrency(category.amount)}</Text><Text style={{ color: Colors.textMuted, fontSize: 12 }}>{percentText(percent(category.amount, total))}</Text></View>
+    </Pressable>) : <Text style={{ color: Colors.textMuted, textAlign: 'center', lineHeight: 22 }}>No hay gastos para distribuir en este período.</Text>}
   </View>;
 }
 
@@ -46,29 +51,36 @@ export interface LinePoint { key: string; label: string; description: string; am
 export function ExpenseLine({ points }: { points: LinePoint[] }) {
  return <ChartEntrance>{progress=><LineChart points={points} progress={progress}/>}</ChartEntrance>;
 }
-function LineChart({points,progress}:{points:LinePoint[];progress:number}){
+function LineChart({ points, progress }: { points: LinePoint[]; progress: number }) {
   const [selection, setSelection] = useState<number | null>(null);
+  const [width, setWidth] = useState(640);
+  const height = 230, left = 52, bottom = 196, top = 16;
   const max = Math.max(1, ...points.map(point => point.amount));
-  const x = (index: number) => points.length <= 1 ? 330 : 60 + index / (points.length - 1) * 555;
-  const axisY = (amount:number)=>185-amount/max*155;
-  const y = (amount: number) => 185 - amount / max * 155 * progress;
-  const line = points.map((point, index) => `${index ? 'L' : 'M'} ${x(index)} ${y(point.amount)}`).join(' ');
-  const area = points.length ? `${line} L ${x(points.length - 1)} 185 L ${x(0)} 185 Z` : '';
+  const hasData = points.some(point => point.amount > 0);
+  const step = (width - left - 8) / Math.max(1, points.length);
+  const bar = Math.max(3, Math.min(34, step * 0.62));
+  const y = (amount: number) => bottom - amount / max * (bottom - top);
+  const peak = points.reduce<LinePoint | null>((best, point) => point.amount > (best?.amount ?? 0) ? point : best, null);
   const active = selection !== null ? points[selection] : null;
-  return <View style={{ gap: 10 }}>
-    <Svg width="100%" height={235} viewBox="0 0 640 225" accessibilityLabel="Evolución del gasto en el período">
-      <Defs><LinearGradient id="reportArea" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#0D9488" stopOpacity={0.22} /><Stop offset="1" stopColor="#0D9488" stopOpacity={0.015} /></LinearGradient></Defs>
-      {[0, 0.5, 1].map(fraction => <G key={fraction}><Line x1={60} x2={615} y1={axisY(max * fraction)} y2={axisY(max * fraction)} stroke="#E7EDF5" strokeDasharray="4 5" /><SvgText x={50} y={axisY(max * fraction) + 4} fill="#7C899D" fontSize={10} textAnchor="end">{new Intl.NumberFormat('es-CL', { notation: 'compact', maximumFractionDigits: 1 }).format(max === 1 && !points.some(p => p.amount > 0) ? 0 : max * fraction)}</SvgText></G>)}
-      {area ? <Path d={area} fill="url(#reportArea)" /> : null}
-      {line ? <Path d={line} stroke="#0D9488" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" fill="none" /> : null}
-      {points.map((point, index) => <G key={point.key}>
-        {(index === 0 || index === points.length - 1 || index % Math.max(1, Math.ceil(points.length / 7)) === 0) ? <SvgText x={x(index)} y={210} fill="#7C899D" fontSize={10} textAnchor="middle">{point.label}</SvgText> : null}
-        <Circle cx={x(index)} cy={y(point.amount)} r={selection === index ? 8 : point.amount===max ? 6.5 : points.length <= 12 ? 5 : 3.5} fill={selection === index ? '#17233D' : '#0D9488'} stroke="white" strokeWidth={1.5} />
-        <Rect x={x(index) - Math.max(6, 555 / Math.max(1, points.length) / 2)} y={12} width={Math.max(12, 555 / Math.max(1, points.length))} height={180} fill="transparent" {...chartPress(() => setSelection(index))} />
+  const every = Math.max(1, Math.ceil(points.length / (width < 420 ? 6 : 12)));
+  return <View style={{ gap: 10 }} onLayout={event => setWidth(Math.max(260, event.nativeEvent.layout.width))}>
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} accessibilityLabel="Evolución del gasto en el período">
+      {[0, 0.5, 1].map(fraction => <G key={fraction}>
+        <Line x1={left} x2={width} y1={y(max * fraction)} y2={y(max * fraction)} stroke={Colors.border} strokeDasharray={fraction ? '4 5' : undefined} />
+        <SvgText x={left - 8} y={y(max * fraction) + 4} fill={Colors.textMuted} fontSize={11} fontFamily={SANS} textAnchor="end">{hasData ? new Intl.NumberFormat('es-CL', { notation: 'compact', maximumFractionDigits: 1 }).format(max * fraction) : fraction ? '' : '0'}</SvgText>
       </G>)}
+      {points.map((point, index) => {
+        const x = left + step * index + step / 2, size = (bottom - y(point.amount)) * progress;
+        return <G key={point.key}>
+          {point.amount > 0 ? <Rect x={x - bar / 2} y={bottom - Math.max(3, size)} width={bar} height={Math.max(3, size)} rx={Math.min(5, bar / 2)} fill={selection === index ? Colors.accent : point === peak ? Colors.primary : '#7CC4C1'} /> : null}
+          {index % every === 0 ? <SvgText x={x} y={216} fill={Colors.textMuted} fontSize={11} fontFamily={SANS} textAnchor="middle">{point.label}</SvgText> : null}
+          <Rect x={x - step / 2} y={top} width={step} height={bottom - top} fill="transparent" {...chartPress(() => setSelection(selection === index ? null : index))} />
+        </G>;
+      })}
     </Svg>
-    <View style={{ backgroundColor: '#F4F8F8', borderRadius: 12, padding: 13, flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-      <Text style={{ color: '#64748B', fontSize: 12, flex: 1 }}>{active?.description ?? 'Toca un punto para ver su importe'}</Text><Text style={{ fontWeight: '700', fontSize: 13, color: '#0F8277' }}>{active ? formatCurrency(active.amount) : 'CLP'}</Text>
+    <View style={{ backgroundColor: Colors.surfaceMuted, borderRadius: 12, padding: 13, flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
+      <Text style={{ color: Colors.textMuted, fontSize: 13, flex: 1 }}>{active?.description ?? (peak ? `Mayor gasto: ${peak.description}` : 'Sin gasto en el período')}</Text>
+      <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.primaryText }}>{formatCurrency(active?.amount ?? peak?.amount ?? 0)}</Text>
     </View>
   </View>;
 }

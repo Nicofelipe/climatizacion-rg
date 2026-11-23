@@ -22,7 +22,7 @@ export async function authenticateToken(
 
   if (!authorization?.startsWith('Bearer ')) {
     res.status(401).json({
-      message: 'Authentication required',
+      message: 'Debes iniciar sesión.',
     });
     return;
   }
@@ -45,7 +45,7 @@ export async function authenticateToken(
     if (!payload || !Number.isInteger(payload.userId) || payload.userId <= 0 ||
         !Number.isInteger(payload.companyId) || payload.companyId <= 0 ||
         !['ADMIN', 'EMPLOYEE'].includes(payload.role)) {
-      res.status(401).json({ message: 'Invalid session token' });
+      res.status(401).json({ message: 'Tu sesión no es válida. Vuelve a iniciar sesión.' });
       return;
     }
 
@@ -63,7 +63,7 @@ export async function authenticateToken(
     next();
   } catch {
     res.status(401).json({
-      message: 'Invalid or expired token',
+      message: 'Tu sesión venció. Vuelve a iniciar sesión.',
     });
   }
 }

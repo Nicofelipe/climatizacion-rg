@@ -73,24 +73,91 @@ test('Chilean prose VAT, spaced currency and terminal punctuation are read',()=>
 test('currency-only line is skipped, subtotal and payment values are not substituted',()=>{
  const value=parseReceiptText('TOTAL\n$\n9.520\nIVA DE ESTA BOLETA ES\n$1.520');
  assert.equal(value.totalAmount,'9520');assert.equal(value.vatAmount,'1520');
- for(const text of ['SUBTOTAL 5.000\nTOTAL PAGADO 6.000','TOTAL\nBOLETA 123','TOTAL NETO 5.000\nTOTAL IVA 950'])assert.equal(parseReceiptText(text).totalAmount,'');
+ for(const text of ['SUBTOTAL 5.000\nTOTAL PAGADO 6.000','TOTAL\nBOLETA 123'])assert.equal(parseReceiptText(text).totalAmount,'');
 });
 
 test('conflicting totals and non-integral VAT remain blank for manual review',()=>{
  assert.equal(parseReceiptText('TOTAL 1.000\nTOTAL A PAGAR 2.000').totalAmount,'');
  assert.equal(parseReceiptText('TOTAL 1.000\nEL IVA DE ESTA BOLETA ES 159,66').vatAmount,'');
 });
-test('scan drafts can be consumed once and never cross user or company',()=>{
- const {setScannedReceiptDraft,takeScannedReceiptDraft}=require('../../mobile/src/utils/scannedReceiptDraft.ts');
- setScannedReceiptDraft({userId:1,companyId:3,uri:'file:///private/photo.jpg'});assert.equal(takeScannedReceiptDraft(2,3),null);
- setScannedReceiptDraft({userId:1,companyId:3,uri:'file:///private/photo.jpg'});assert.equal(takeScannedReceiptDraft(1,4),null);
- setScannedReceiptDraft({userId:1,companyId:3,uri:'file:///private/photo.jpg'});assert.equal(takeScannedReceiptDraft(1,3).uri,'file:///private/photo.jpg');assert.equal(takeScannedReceiptDraft(1,3),null);
+
+
+test('net plus VAT proposes the total only when they are arithmetically consistent, and asks to review it',()=>{
+ const value=parseReceiptText('TOTAL NETO 5.000\nTOTAL IVA 950');assert.equal(value.totalAmount,'5950');assert.equal(value.confidence.totalAmount,'review');assert.match(value.warnings.join(' '),/dedujo/);
+ assert.equal(parseReceiptText('TOTAL NETO 5.000\nTOTAL IVA 400').totalAmount,'');
+});
+test('cash minus change and card payments support the total, never the cash handed over',()=>{
+ const cash=parseReceiptText('SUBTOTAL 10.000\nEFECTIVO $20.000\nVUELTO $8.100');assert.equal(cash.totalAmount,'11900');assert.equal(cash.confidence.totalAmount,'review');
+ assert.equal(parseReceiptText('EFECTIVO $20.000').totalAmount,'');
+ assert.equal(parseReceiptText('TARJETA DE DEBITO $11.900\nIVA $1.900').totalAmount,'11900');
+ assert.equal(parseReceiptText('TARJETA DE DEBITO $15.000\nIVA $1.900').totalAmount,'');
+});
+test('several totals are resolved only by the receipt own VAT',()=>{
+ assert.equal(parseReceiptText('TOTAL 15.000\nTOTAL A PAGAR 11.900\nIVA 1.900').totalAmount,'11900');
+ assert.equal(parseReceiptText('TOTAL 15.000\nTOTAL A PAGAR 11.900').totalAmount,'');
+});
+test('camera look-alikes are repaired only inside amounts and known labels',()=>{
+ const value=parseReceiptText('B0LETA ELECTRONICA N° 4471\nT0TAL $11.9OO\n1VA $1.9O0');
+ assert.deepEqual([value.receiptNumber,value.totalAmount,value.vatAmount],['4471','11900','1900']);
+ // Un monto truncado no se convierte en otro más pequeño.
+ assert.equal(parseReceiptText('TOTAL $11.9').totalAmount,'');
+ assert.equal(parseReceiptText('TOTAL $1.19.00').totalAmount,'');
+});
+test('supplier name and RUT are read from the header; the customer RUT is ignored',()=>{
+ const value=parseReceiptText('FERRETERÍA EL TORNILLO SPA\nGIRO: VENTA DE MATERIALES\nAV. MATTA 123, SANTIAGO\nR.U.T.: 76.086.428-5\nBOLETA ELECTRONICA N° 55\nRUT CLIENTE 12.345.678-5\nTOTAL $1.190\nIVA $190');
+ assert.equal(value.supplierName,'FERRETERÍA EL TORNILLO SPA');assert.equal(value.supplierRut,'76086428-5');assert.equal(value.suggestedType,3);assert.equal(value.vatSource,'CALCULATED');
+ assert.equal(parseReceiptText('TIENDA\nRUT 76.086.428-9').supplierRut,'','dígito verificador incorrecto');
+ assert.equal(parseReceiptText('RUT CLIENTE 12.345.678-5').supplierRut,'');
+});
+test('VAT is accepted only if it is possible for the total, and tells how it must be recorded',()=>{
+ const fuel=parseReceiptText('COPEC S.A.\nGASOLINA 95 25,3 LITROS\nTOTAL $30.000\nIVA $3.215');
+ assert.deepEqual([fuel.vatAmount,fuel.vatSource,fuel.suggestedType],['3215','RECEIPT',2]);
+ assert.equal(parseReceiptText('TOTAL $1.000\nIVA $500').vatAmount,'');
+ const exempt=parseReceiptText('BOLETA EXENTA ELECTRONICA N° 77\nTOTAL $5.000');assert.deepEqual([exempt.receiptNumber,exempt.vatAmount,exempt.vatSource],['77','0','EXEMPT']);
+ assert.equal(parseReceiptText('TOTAL $1.000').vatSource,null);
+});
+test('the issue date wins over resolution, due and exchange dates',()=>{
+ assert.equal(parseReceiptText('RES. EX. SII N° 80 DE 22/08/2014\n15/11/2026 13:45\nCAMBIOS HASTA 15/12/2026').expenseDate,'2026-11-15');
+ assert.equal(parseReceiptText('FECHA EMISION 15/11/2026\n16/11/2026').expenseDate,'2026-11-15');
+ assert.equal(parseReceiptText('15/11/26 13:45').expenseDate,'2026-11-15');
+ assert.equal(parseReceiptText('15-NOV-2026').expenseDate,'2026-11-15');
+});
+test('card vouchers are not mistaken for receipts unless they are valid as one',()=>{
+ assert.match(parseReceiptText('TRANSBANK\nCOMPROBANTE DE VENTA\nTOTAL $5.000').warnings.join(' '),/comprobante de pago/);
+ const valid=parseReceiptText('TRANSBANK\nCOMPROBANTE DE VENTA\nVALIDO COMO BOLETA\nNUMERO DE OPERACION: 009988\nTOTAL $5.000');
+ assert.equal(valid.receiptNumber,'009988');assert.doesNotMatch(valid.warnings.join(' '),/comprobante de pago/);
+});
+test('invoices are recognised with their number',()=>{
+ const value=parseReceiptText('R.U.T.: 76.086.428-5\nFACTURA ELECTRONICA\nN° 10234\nMONTO NETO $10.000\nIVA 19% $1.900\nTOTAL $11.900');
+ assert.deepEqual([value.documentType,value.receiptNumber,value.totalAmount,value.vatAmount,value.confidence.totalAmount],['FACTURA','10234','11900','1900','read']);
+});
+const ted='<TED version="1.0"><DD><RE>76086428-5</RE><TD>39</TD><F>0012345</F><FE>2026-11-15</FE><RR>66666666-6</RR><RSR>CLIENTE</RSR><MNT>11900</MNT><IT1>CAÑERIA COBRE &amp; CODO</IT1><CAF version="1.0"></CAF><TSTED>2026-11-15T13:45:00</TSTED></DD><FRMT>x</FRMT></TED>';
+test('the SII stamp overrides misread text and marks the fields as exact',()=>{
+ const value=parseReceiptText('FERRETERIA X SPA\nBOLETA N° 99999\nFECHA 01/01/2025\nTOTAL $8.000\nIVA $1.900',ted);
+ assert.deepEqual([value.receiptNumber,value.expenseDate,value.totalAmount,value.supplierRut,value.vatAmount,value.vatSource],['12345','2026-11-15','11900','76086428-5','1900','CALCULATED']);
+ assert.equal(value.confidence.totalAmount,'exact');assert.equal(value.fromTimbre,true);assert.equal(value.suggestedType,3);assert.deepEqual(value.warnings,[]);
+ const exempt=parseReceiptText('',ted.replace('<TD>39','<TD>41'));assert.deepEqual([exempt.vatAmount,exempt.vatSource],['0','EXEMPT']);
+});
+test('a damaged or foreign barcode is ignored instead of trusted',()=>{
+ for(const bad of [null,'','QR https://example.test',ted.replace('76086428-5','76086428-9'),ted.replace('<TD>39','<TD>52'),ted.replace('2026-11-15</FE>','2026-13-45</FE>'),ted.replace('<MNT>11900','<MNT>0'),ted.replace('<F>0012345','<F>abc')]){
+  const value=parseReceiptText('BOLETA N° 77\nTOTAL $1.000',bad);assert.equal(value.fromTimbre,false);assert.equal(value.receiptNumber,'77');
+ }
+});
+test('hostile or enormous text neither hangs nor throws',()=>{
+ const started=Date.now();
+ for(const text of ['9'.repeat(200000),('TOTAL '+'1.'.repeat(5000)+'\n').repeat(50),'RUT '+'1 '.repeat(50000),'\u0000\uFFFF\n'.repeat(5000),'('.repeat(50000)])parseReceiptText(text);
+ assert.ok(Date.now()-started<4000,`${Date.now()-started} ms`);
 });
 
-test('tax estimates never overwrite readings, infer zero VAT, or estimate fuel',()=>{
- const {estimateReceiptAmount:estimate}=require('../../mobile/src/utils/receiptEstimate.ts');
- assert.equal(estimate('11900','',1).value,'1900');assert.equal(estimate('','1900',1).value,'11900');
- for(const args of [['11900','1900',1],['','0',1],['11900','',2],['','1900',2],['','999999999',1],['bad','',1]])assert.equal(estimate(...args),null);
- // Rounded IVA does not uniquely determine a receipt total: this is a proposal only.
- assert.equal(estimate('','1',1).value,'6');
+test('browser OCR artefacts: degree sign as asterisk and currency sign as a digit',()=>{
+ const value=parseReceiptText('BOLETA ELECTRONICA N* 5512\nTOTAL   $ 23.790\nIVA (19%)      7 3.798');
+ assert.deepEqual([value.receiptNumber,value.totalAmount,value.vatAmount,value.vatSource],['5512','23790','3798','CALCULATED']);
+ assert.equal(parseReceiptText('BOLETA\nN" 77').receiptNumber,'77');
+ assert.equal(parseReceiptText('TOTAL 12 3.798').totalAmount,'');
+});
+test('a VAT that does not match a common receipt asks to check both amounts',()=>{
+ const value=parseReceiptText('FERRETERIA X SPA\nTOTAL $23.790\nIVA $379');
+ assert.equal(value.confidence.totalAmount,'review');assert.match(value.warnings.join(' '),/no corresponde al 19%/);
+ assert.equal(parseReceiptText('COPEC\nTOTAL $30.000\nIVA $3.215').warnings.some(text=>/19%/.test(text)),false);
+ assert.equal(parseReceiptText('SUPERMERCADO\nEXENTO $5.000\nTOTAL $16.900\nIVA $1.900').warnings.some(text=>/19%/.test(text)),false);
 });

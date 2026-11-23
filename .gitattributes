@@ -1,0 +1,5 @@
+# Los scripts del servidor y las migraciones necesitan finales de línea de Linux.
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/** text eol=lf
+*.png binary

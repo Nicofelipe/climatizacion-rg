@@ -1,137 +1,100 @@
-import FormScrollView from '@/components/common/FormScrollView';
-import ClepitBrand from '@/components/common/ClepitBrand';
-import { useEffect,useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Ionicons} from '@expo/vector-icons';
-
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, router } from 'expo-router';
-import { Pressable,ScrollView, StyleSheet, Text, View } from 'react-native';
-
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { ApiError } from '@/api/http';
+import ClepitBrand from '@/components/common/ClepitBrand';
+import FormScrollView from '@/components/common/FormScrollView';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import Text from '@/components/ui/Text';
+import { Banner, IconName, Sheet, styles as kit, useWide } from '@/components/ui/kit';
 import { useAuth } from '@/hooks/useAuth';
-import { Colors, Spacing, Typography } from '@/theme';
+import { BorderRadius, Colors, Shadows } from '@/theme';
+
+const REMEMBERED = 'remembered-login-email';
+const points: [IconName, string, string][] = [
+  ['camera-outline', 'Toma la foto', 'Los datos se leen solos, incluso desde el timbre del SII.'],
+  ['checkmark-done-outline', 'Se revisa y se aprueba', 'Cada cambio queda registrado con nombre y fecha.'],
+  ['bar-chart-outline', 'El gasto queda claro', 'Presupuesto, reportes y Excel listos para la contadora.'],
+];
 
 export default function LoginScreen() {
   const { login, loginWithGoogle, isLoading, isAuthenticated } = useAuth();
-
+  const wide = useWide();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberEmail,setRememberEmail]=useState(false);
-  useEffect(()=>{void AsyncStorage.getItem('remembered-login-email').then(value=>{if(value){setEmail(value);setRememberEmail(true);}}).catch(()=>{});},[]);
-  const [error, setError] = useState<string | null>(null);
+  const [remember, setRemember] = useState(false);
+  const [error, setError] = useState('');
+  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => { AsyncStorage.getItem(REMEMBERED).then(value => { if (value) { setEmail(value); setRemember(true); } }).catch(() => {}); }, []);
 
   if (isAuthenticated) return <Redirect href="/(protected)/(tabs)" />;
 
-  async function handleLogin() {
-    if (isLoading) return;
-    setError(null);
+  async function submit(companyId?: number) {
+    if (isLoading || !email.trim() || !password) return;
+    setError('');
     try {
-      await login({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-      if(rememberEmail)await AsyncStorage.setItem('remembered-login-email',email.trim().toLowerCase()).catch(()=>{});
-      else await AsyncStorage.removeItem('remembered-login-email').catch(()=>{});
-
+      const address = email.trim().toLowerCase();
+      await login({ email: address, password, ...(companyId ? { companyId } : {}) });
+      await (remember ? AsyncStorage.setItem(REMEMBERED, address) : AsyncStorage.removeItem(REMEMBERED)).catch(() => {});
+      setCompanies([]);
       router.replace('/(protected)/(tabs)');
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'No fue posible iniciar sesión';
-
-      setError(message);
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.code === 'COMPANY_SELECTION_REQUIRED') { setCompanies(failure.data.companies); return; }
+      setCompanies([]);
+      setError(failure instanceof Error ? failure.message : 'No fue posible iniciar sesión.');
     }
   }
+  async function google() {
+    if (isLoading) return;
+    setError('');
+    try { await loginWithGoogle(); router.replace('/(protected)/(tabs)'); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'No fue posible ingresar con Google.'); }
+  }
 
-  return (
-    <FormScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.content}>
-        <Text style={styles.eyebrow}>GESTIÓN DE BOLETAS</Text>
-        <ClepitBrand width={240}/>
+  const form = <View style={s.form}>
+    {!wide ? <View style={{ alignItems: 'center', paddingBottom: 6 }}><ClepitBrand size={56} /></View> : null}
+    <View style={{ gap: 4 }}><Text accessibilityRole="header" style={kit.title}>Iniciar sesión</Text><Text style={kit.subtitle}>Usa la cuenta que registró tu empresa.</Text></View>
+    <Input label="Correo" icon="mail-outline" value={email} onChangeText={setEmail} placeholder="nombre@empresa.cl" keyboardType="email-address" />
+    <Input label="Contraseña" icon="lock-closed-outline" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secureTextEntry onSubmitEditing={() => { void submit(); }} />
+    <View style={kit.between}>
+      <Pressable accessibilityRole="checkbox" aria-checked={remember} onPress={() => setRemember(value => !value)} style={[kit.row, { gap: 8, paddingVertical: 4 }]}>
+        <Ionicons name={remember ? 'checkbox' : 'square-outline'} size={22} color={remember ? Colors.primary : Colors.textMuted} /><Text style={{ fontSize: 14, color: Colors.textSecondary }}>Recordar mi correo</Text>
+      </Pressable>
+      <Pressable accessibilityRole="link" onPress={() => router.push('/(auth)/forgot-password')} hitSlop={8}><Text style={{ fontSize: 14, fontWeight: '600', color: Colors.primaryText }}>Olvidé mi contraseña</Text></Pressable>
+    </View>
+    {error ? <Banner tone="danger">{error}</Banner> : null}
+    <Button title="Entrar" onPress={() => { void submit(); }} loading={isLoading} disabled={!email.trim() || !password} />
+    <Button variant="secondary" icon="logo-google" title="Entrar con Google" disabled={isLoading} onPress={() => { void google(); }} />
+    <Text style={[kit.caption, { textAlign: 'center' }]}>Con Google, elige el mismo correo que registró tu empresa. ¿No tienes acceso? Pídeselo a tu administrador.</Text>
+  </View>;
 
-        <Text style={styles.subtitle}>
-          Tus gastos y respaldos, en un solo lugar.
-        </Text>
-
-        <View style={styles.form}>
-          <Text style={styles.formTitle}>Bienvenido</Text>
-          <Text style={styles.help}>Ingresa con la cuenta que registró el administrador de tu empresa.</Text>
-          <Input
-            label="Correo electrónico"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="correo@empresa.cl"
-            keyboardType="email-address"
-          />
-
-          <Input
-            label="Contraseña"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Ingresa tu contraseña"
-            secureTextEntry
-          />
-
-          <Pressable accessibilityRole="checkbox" accessibilityState={{checked:rememberEmail}} onPress={()=>{setRememberEmail(value=>!value);if(rememberEmail)void AsyncStorage.removeItem('remembered-login-email');}} style={{flexDirection:'row',alignItems:'center',gap:9,paddingVertical:8}}><Ionicons name={rememberEmail?'checkbox':'square-outline'} size={23} color={Colors.primary}/><Text style={{color:Colors.text}}>Recordar mi correo</Text></Pressable>
-          <Button
-            title="Iniciar sesión"
-            onPress={handleLogin}
-            loading={isLoading}
-            disabled={!email.trim() || !password}
-          />
-          <View style={{marginTop:12}}><Button variant="secondary" title="Continuar con Google" disabled={isLoading} onPress={()=>{if(isLoading)return;setError(null);void loginWithGoogle().then(()=>router.replace('/(protected)/(tabs)')).catch(error=>setError(error instanceof Error?error.message:'No fue posible ingresar con Google.'));}}/></View>
-          <Text style={{fontSize:12,color:Colors.textSecondary,lineHeight:19,marginTop:10}}>Elige en Google el mismo correo que registró tu empresa. No necesitas escribir la contraseña de Clepit para esta opción.</Text>
-          {error ? <View accessibilityRole="alert" style={{backgroundColor:'#FEF2F2',borderRadius:12,padding:12,marginTop:12}}><Text style={{color:'#991B1B',lineHeight:21}}>{error}</Text></View> : null}
-          <Pressable accessibilityRole="button" onPress={()=>router.push('/(auth)/forgot-password')} style={{paddingVertical:14}}><Text style={{color:Colors.primary,fontWeight:'600',fontSize:13}}>Olvidé mi contraseña</Text></Pressable>
-          <Text style={styles.help}>¿No tienes acceso? Solicita al encargado que registre tu correo y te entregue tu contraseña por un canal privado.</Text>
-        </View>
+  return <View style={[kit.page, { flexDirection: 'row' }]}>
+    {wide ? <View style={s.panel}>
+      <ClepitBrand size={62} light />
+      <View style={{ gap: 26 }}>
+        <Text style={s.headline}>Cada boleta cuenta.{'\n'}Ninguna se pierde.</Text>
+        <View style={{ gap: 20 }}>{points.map(([icon, title, text]) => <View key={title} style={[kit.row, { gap: 14, alignItems: 'flex-start' }]}>
+          <View style={s.point}><Ionicons name={icon} size={20} color={Colors.ink} /></View>
+          <View style={{ flex: 1, gap: 2 }}><Text style={{ color: Colors.white, fontWeight: '700', fontSize: 16 }}>{title}</Text><Text style={{ color: Colors.inkSoft, fontSize: 14, lineHeight: 21 }}>{text}</Text></View>
+        </View>)}</View>
       </View>
-    </FormScrollView>
-  );
+      <Text style={{ color: Colors.inkSoft, fontSize: 13 }}>Un producto Clepit</Text>
+    </View> : null}
+    <FormScrollView style={{ flex: 1 }} contentContainerStyle={s.scroll}>{form}</FormScrollView>
+    <Sheet visible={companies.length > 0} title="¿A qué empresa quieres entrar?" onClose={() => setCompanies([])}>
+      <Text style={kit.subtitle}>Tu correo está registrado en más de una.</Text>
+      {companies.map(company => <Button key={company.id} variant="secondary" icon="business-outline" title={company.name} loading={isLoading} onPress={() => { void submit(company.id); }} />)}
+    </Sheet>
+  </View>;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xl,
-  },
-
-  content: {
-    width: '100%',
-    maxWidth: 420,
-    alignSelf: 'center',
-  },
-
-  title: {
-    fontSize: Typography.title,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-
-  subtitle: {
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xl,
-    fontSize: Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-
-  form: {
-    width: '100%',
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  eyebrow: { textAlign: 'center', color: Colors.primary, fontWeight: '700', letterSpacing: 2, marginBottom: Spacing.md },
-  formTitle: { fontSize: 24, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
-  help: { color: Colors.textSecondary, lineHeight: 22, marginVertical: Spacing.md },
-  error: { color: Colors.danger, marginTop: Spacing.md },
+const s = StyleSheet.create({
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  form: { width: '100%', maxWidth: 430, alignSelf: 'center', gap: 16, padding: 24, borderRadius: BorderRadius.xxl, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, ...Shadows.card },
+  panel: { width: '44%', maxWidth: 620, backgroundColor: Colors.ink, padding: 48, justifyContent: 'space-between' },
+  headline: { color: Colors.white, fontSize: 42, lineHeight: 48, fontWeight: '800', letterSpacing: -1.2 },
+  point: { width: 40, height: 40, borderRadius: 13, backgroundColor: Colors.sunny, alignItems: 'center', justifyContent: 'center' },
 });

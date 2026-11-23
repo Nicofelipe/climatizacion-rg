@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 let scope;
 let companyParams;
+let range;
 function stub(relativePath, exports) {
   const filename = require.resolve(relativePath);
   require.cache[filename] = { id: filename, filename, loaded: true, exports };
@@ -10,8 +11,10 @@ function stub(relativePath, exports) {
 stub('../src/database/sqlServer.ts', { executeQuery: async (sql, params) => {
   companyParams = params; return [{ Name: 'Empresa de prueba' }];
 } });
-stub('../src/services/expense.service.ts', { getExpenses: async (...args) => { scope = args; return []; } });
-const { summarizeExpenses, currentChileMonth, getDashboard } = require('../src/services/dashboard.service.ts');
+stub('../src/services/expense.service.ts', { getExpenses: async (...args) => { scope = args.slice(0, 3); range = args[3]; return []; }, countPending: async () => 4 });
+let budgetOwner;
+stub('../src/services/budget.service.ts', { getBudget: async (company, owner) => { budgetOwner = owner; return null; } });
+const { summarizeExpenses, currentChileMonth, getDashboard, budgetUsage, dashboardRange } = require('../src/services/dashboard.service.ts');
 const expense = (Id, ExpenseDate, Status, TotalAmount, ExpenseTypeName = 'Combustible') => ({
   Id, ExpenseDate, Status, TotalAmount, ExpenseTypeName,
   ReceiptNumber: `B-${Id}`, NetAmount: TotalAmount, VatAmount: 0,
@@ -27,9 +30,9 @@ test('administrator personal report uses owner scope and company report uses com
   const personal=await getDashboard(3,5,'ADMIN','2026-10','month','personal');
   assert.equal(personal.scope,'personal');assert.deepEqual(scope,[3,5,'EMPLOYEE']);
   const company=await getDashboard(3,5,'ADMIN','2026-10','month','company');
-  assert.equal(company.scope,'company');assert.deepEqual(scope,[3,5,'ADMIN']);
+  assert.equal(company.scope,'company');assert.deepEqual(scope,[3,5,'ADMIN']);assert.equal(budgetOwner,null);assert.equal(company.pendingAllTime,4);assert.deepEqual(range,{from:'2026-05-01',to:'2026-10-31'});
   const employee=await getDashboard(3,6,'EMPLOYEE','2026-10','month','company');
-  assert.equal(employee.scope,'personal');assert.deepEqual(scope,[3,6,'EMPLOYEE']);
+  assert.equal(employee.scope,'personal');assert.equal(budgetOwner,6);assert.deepEqual(employee.workers,[]);assert.deepEqual(scope,[3,6,'EMPLOYEE']);
 });
 test('monthly totals exclude rejected receipts but show their count and amount', () => {
   const summary = summarizeExpenses(receipts, '2026-10');
@@ -82,6 +85,34 @@ test('annual summary uses same elapsed months and excludes future months', () =>
   assert.equal(result.trend.length, 10);
   assert.equal(result.trend[0].month, '2026-01');
   assert.equal(result.trend[9].month, '2026-10');
+});
+
+test('an ongoing month is compared with the same stretch of the previous month', () => {
+  const data = [expense(1, '2026-10-05', 'APPROVED', 100), expense(2, '2026-09-08', 'APPROVED', 50), expense(3, '2026-09-25', 'APPROVED', 900)];
+  const result = summarizeExpenses(data, '2026-10', 'month', new Date('2026-10-10T15:00:00Z'));
+  assert.equal(result.previousTotal, 50);
+  assert.equal(result.changePercent, 100);
+  assert.equal(result.comparisonLabel, 'mismo tramo del mes anterior');
+  const closed = summarizeExpenses(data, '2026-10', 'month', new Date('2026-11-10T15:00:00Z'));
+  assert.equal(closed.previousTotal, 950);
+  assert.equal(closed.comparisonLabel, 'mes anterior');
+});
+test('an ongoing year stops the previous year at the same day, not at the end of the month', () => {
+  const data = [expense(1, '2026-10-05', 'APPROVED', 100), expense(2, '2025-10-08', 'APPROVED', 50), expense(3, '2025-10-25', 'APPROVED', 900)];
+  assert.equal(summarizeExpenses(data, '2026-10', 'year', new Date('2026-10-10T15:00:00Z')).previousTotal, 50);
+});
+test('the 31st is compared with the last day of a shorter month', () => {
+  const data = [expense(1, '2026-02-28', 'APPROVED', 70), expense(2, '2026-03-31', 'APPROVED', 70)];
+  assert.equal(summarizeExpenses(data, '2026-03', 'month', new Date('2026-03-31T15:00:00Z')).previousTotal, 70);
+});
+test('budget usage covers the elapsed months and may exceed 100%', () => {
+  assert.equal(budgetUsage(null, 500, 1), null);
+  assert.deepEqual(budgetUsage(1000, 1250, 1), { monthly: 1000, amount: 1000, spent: 1250, remaining: -250, percent: 125 });
+  assert.deepEqual(budgetUsage(1000, 2500, 10), { monthly: 1000, amount: 10000, spent: 2500, remaining: 7500, percent: 25 });
+});
+test('only the dates needed for the summary are read', () => {
+  assert.deepEqual(dashboardRange('2027-02', 'month'), { from: '2026-09-01', to: '2027-02-28' });
+  assert.deepEqual(dashboardRange('2026-10', 'year'), { from: '2025-01-01', to: '2026-12-31' });
 });
 
 test('past annual period contains all twelve months', () => {

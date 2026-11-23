@@ -1,6 +1,6 @@
 require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8'),bcrypt=require('bcryptjs');
-const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs=require('./fixtures/connection.cjs');
 let expired=false,used=false,version=0,emailChanged=false,result;
 const mail=require.resolve('../src/services/recoveryMail.service.ts');require.cache[mail]={id:mail,filename:mail,loaded:true,exports:{sendRecoveryMail:async()=>{},recoveryMailConfigured:()=>true}};
 const db=require.resolve('../src/database/sqlServer.ts');require.cache[db]={id:db,filename:db,loaded:true,exports:{executeQuery:(sql,params)=>new Promise((resolve,reject)=>{

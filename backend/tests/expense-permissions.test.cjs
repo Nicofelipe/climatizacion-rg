@@ -5,9 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const database = require('../src/database/sqlServer.ts');
 const sqlDriver = require('msnodesqlv8');
-const connectionString = 'Driver={ODBC Driver 18 for SQL Server};Server=' +
-  process.env.DB_SERVER + ';Database=' + process.env.DB_DATABASE +
-  ';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const connectionString = require('./fixtures/connection.cjs');
 function executeRealQuery(sql, params) {
   return new Promise((resolve, reject) => {
     const allRows = [];
@@ -20,12 +18,11 @@ function executeRealQuery(sql, params) {
 }
 
 const fixtureQuery = async (sql, params) => {
-  if (sql.includes('SELECT TOP 1 Id')) return []; // No duplicate receipt in fixture.
   assert.match(sql, /UPDATE dbo\.Expense/);
   const fixture = `
     SET NOCOUNT ON;
     CREATE TABLE #Expense (
-      Id int, CompanyId int, UserId int, ExpenseTypeId int, SupplierId int,
+      Id int, CompanyId int, UserId int, ExpenseTypeId int, SupplierId int, DocumentType nvarchar(10) DEFAULT N'BOLETA', VatSource nvarchar(12) DEFAULT N'CALCULATED', ReceiptKey AS ReceiptNumber,
       ReceiptNumber nvarchar(50), ExpenseDate date, TaxRate decimal(5,2),
       NetAmount decimal(18,2), VatAmount decimal(18,2), TotalAmount decimal(18,2),
       Description nvarchar(500), Status nvarchar(20), IsDeleted bit,

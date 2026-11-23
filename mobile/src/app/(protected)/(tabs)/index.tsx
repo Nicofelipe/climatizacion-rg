@@ -1,138 +1,110 @@
-import { useState } from 'react';
-import ReceiptEntryOptions from '@/components/common/ReceiptEntryOptions';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Image,Pressable, RefreshControl, ScrollView, Text, useWindowDimensions, View } from 'react-native';
-
-import styles, { dashboardPalette } from '@/components/common/DashboardOverview.styles';
-import ExpenseStatus from '@/components/common/ExpenseStatus';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { BudgetMeter, CategoryBars, MonthBars } from '@/components/common/ExpenseCharts';
 import DashboardPeriodSelector from '@/components/common/DashboardPeriodSelector';
-import ExpenseScopeSelector from '@/components/common/ExpenseScopeSelector';
+import ExpenseScopeSelector, { ExpenseScope } from '@/components/common/ExpenseScopeSelector';
+import ExpenseStatus, { statusDesign } from '@/components/common/ExpenseStatus';
 import RefreshableScrollView from '@/components/common/RefreshableScrollView';
+import Button from '@/components/ui/Button';
+import Text from '@/components/ui/Text';
+import { Banner, Card, EmptyState, IconTile, ScreenHeader, SectionTitle, Segmented, styles as kit, useWide } from '@/components/ui/kit';
+import { typeIcon, typeName } from '@/constants/expenseTypes';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenseDashboard } from '@/hooks/useExpenseDashboard';
+import { BorderRadius, Colors } from '@/theme';
 import { formatCurrency } from '@/utils/currency';
-
-function monthNow() {
-  const parts = new Intl.DateTimeFormat('en', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
-  return `${parts.find(p => p.type === 'year')!.value}-${parts.find(p => p.type === 'month')!.value}`;
-}
-const monthLabel = (month: string, short = false) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('es-CL', short ? { month: 'short', timeZone: 'America/Santiago' } : { month: 'long', year: 'numeric', timeZone: 'America/Santiago' });
-const compact = (amount: number) => new Intl.NumberFormat('es-CL', { notation: 'compact', maximumFractionDigits: 1 }).format(amount);
-const stateDesign = [
-  { status: 'PENDING', label: 'Pendientes', icon: 'time-outline', color: '#A16207', background: '#FEF3C7' },
-  { status: 'APPROVED', label: 'Aprobadas', icon: 'checkmark-circle-outline', color: '#15803D', background: '#DCFCE7' },
-  { status: 'REJECTED', label: 'Rechazadas', icon: 'close-circle-outline', color: '#B91C1C', background: '#FEE2E2' },
-] as const;
+import { monthLabel, readableDate } from '@/utils/dates';
+import { availablePeriodOptions } from '@/utils/periodOptions';
 
 export default function Dashboard() {
   const { user, token } = useAuth();
-  const [month, setMonth] = useState(monthNow);
+  const [month, setMonth] = useState(() => availablePeriodOptions(0).currentPeriod);
   const [mode, setMode] = useState<'month' | 'year'>('month');
-  const [scope,setScope]=useState<'personal'|'company'>('company');
-  const { data, loading, error, reload } = useExpenseDashboard(token, month, mode,scope);
-  const wide = useWindowDimensions().width >= 850;
+  const [scope, setScope] = useState<ExpenseScope>('company');
+  const { data, loading, error, reload } = useExpenseDashboard(token, month, mode, scope);
+  const wide = useWide();
   const admin = user?.role === 'ADMIN';
-  const companyView=admin&&scope==='company';
-  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase();
-  const maxTrend = Math.max(1, ...(data?.trend.map(item => item.amount) ?? []));
-  const goExpenses = () => router.push({pathname:'/(protected)/(tabs)/expenses',params:{view:companyView?'company':'personal',workerId:undefined}});
-  return <View style={styles.page}>
-    <RefreshableScrollView contentContainerStyle={styles.content} refreshing={loading} onRefresh={reload}>
-      <View style={styles.row}>
-        <View style={styles.brand}>
-          <View style={styles.brandIcon}><Image source={require('../../../../assets/images/clipit-icon.png')} style={{width:46,height:46}} resizeMode="contain" accessibilityLabel="Clepit"/></View>
-          <View style={{ flexShrink: 1 }}><Text style={styles.overline}>CLEPIT · MI ESPACIO DE TRABAJO</Text><Text style={styles.company}>{data?.companyName ?? 'Tu empresa'}</Text></View>
-        </View>
+  const company = admin && scope === 'company';
+  const openList = (status?: string) => router.push({ pathname: '/(protected)/(tabs)/expenses', params: { view: company ? 'company' : 'personal', status: status ?? 'ALL', stamp: String(Date.now()) } });
+  const openReview = () => router.push({ pathname: '/(protected)/(tabs)/expenses', params: { review: String(Date.now()) } });
+  const grid = { flexDirection: wide ? 'row' : 'column', gap: 18, alignItems: 'stretch' } as const;
+
+  return <View style={kit.page}>
+    <RefreshableScrollView contentContainerStyle={kit.content} refreshing={loading} onRefresh={reload}>
+      <ScreenHeader eyebrow={data?.companyName ?? 'Tu empresa'} title={user?.firstName?.trim() ? `Hola, ${user.firstName.trim()}` : 'Hola'}
+        subtitle={company ? 'Así van los gastos de toda tu empresa.' : 'Así van tus propias boletas.'} />
+      {!wide ? <Button title="Registrar boleta" icon="camera-outline" onPress={() => router.push('/(protected)/expenses/create')} /> : null}
+      <View style={[kit.wrap, { alignItems: 'center' }]}>
+        {admin ? <ExpenseScopeSelector value={scope} onChange={setScope} /> : null}
+        <Segmented label="Período" value={mode} onChange={setMode} options={[{ value: 'month', label: 'Mes' }, { value: 'year', label: 'Año' }]} />
+        <DashboardPeriodSelector value={month} onChange={setMonth} hideMonth={mode === 'year'} />
       </View>
 
-      <View>
-        <Text style={styles.greeting}>{user?.firstName?.trim() ? `Hola, ${user.firstName.trim()}.` : 'Hola.'}</Text>
-        <ReceiptEntryOptions/>
-        <Text style={styles.subtitle}>{companyView ? 'Gastos de todos los integrantes de tu empresa, incluidos los tuyos.' : 'Este resumen incluye únicamente tus propias boletas.'}</Text>
-      </View>
-      {admin?<ExpenseScopeSelector value={scope} onChange={setScope}/>:null}
-      <View style={[styles.row, { flexWrap: 'wrap' }]}>
-        <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: 'row', alignSelf: 'flex-start', padding: 4, backgroundColor: '#E9EEF7', borderRadius: 12, gap: 4 }}>
-            {([{ value: 'month', label: 'Mensual' }, { value: 'year', label: 'Anual' }] as const).map(item => <Pressable key={item.value} accessibilityRole="button" accessibilityState={{ selected: mode === item.value }} onPress={() => setMode(item.value)} style={{ paddingVertical: 9, paddingHorizontal: 20, borderRadius: 9, backgroundColor: mode === item.value ? '#FFFFFF' : 'transparent' }}><Text style={{ color: mode === item.value ? '#0F8277' : '#64748B', fontWeight: '700', fontSize: 13 }}>{item.label}</Text></Pressable>)}
-          </View>
-          <DashboardPeriodSelector value={month} onChange={setMonth} hideMonth={mode === 'year'} />
-        </View>
-        <View style={styles.scope}><Ionicons name={companyView ? 'people-outline' : 'person-outline'} size={14} color="#475569" /><Text style={styles.scopeText}>{companyView ? 'Resumen general · todos, incluyéndote' : 'Resumen personal · solo mis boletas'}</Text></View>
-      </View>
+      {error ? <Banner tone="danger" title="No pudimos cargar tu resumen" action={<Button compact variant="secondary" title="Reintentar" onPress={reload} style={{ alignSelf: 'flex-start' }} />}>{error}</Banner> : null}
+      {loading && !data ? <Card style={{ alignItems: 'center', paddingVertical: 60 }}><ActivityIndicator color={Colors.primary} /></Card> : data ? <>
+        {admin && data.pendingAllTime ? <Pressable accessibilityRole="button" onPress={openReview} style={({ pressed }) => [s.attention, pressed && { opacity: 0.85 }]}>
+          <IconTile icon="hourglass-outline" tone="warning" />
+          <View style={{ flex: 1, gap: 2 }}><Text style={{ fontWeight: '700' }}>{data.pendingAllTime === 1 ? '1 boleta pendiente' : `${data.pendingAllTime} boletas pendientes`}</Text><Text style={kit.caption}>Revísalas y apruébalas, una a una o varias a la vez.</Text></View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.warning} />
+        </Pressable> : null}
 
-      {error ? <View style={styles.panel}><Text accessibilityRole="alert" style={{ color: '#B91C1C' }}>{error}</Text><Pressable onPress={reload} accessibilityRole="button"><Text style={styles.link}>Volver a intentar →</Text></Pressable></View> : null}
-      {loading ? <View style={styles.hero}><ActivityIndicator color="#B7F2E2" /><Text style={styles.heroHint}>Preparando tu resumen…</Text></View> : data ? <>
-        <View style={[styles.topGrid, { flexDirection: wide ? 'row' : 'column' }]}>
-          <View style={[styles.hero, wide && { flex: 1.6 }]}>
-            <View style={styles.heroOrb} />
-            <View>
-              <Text style={styles.heroEyebrow}>{companyView?'GASTO DE TODA LA EMPRESA':'MI GASTO PERSONAL'} · {mode === 'year' ? 'ANUAL' : 'MENSUAL'}</Text>
-              {mode === 'year' ? <Text style={[styles.heroHint, { textTransform: 'capitalize' }]}>{data.periodLabel}</Text> : null}
-              <Text style={[styles.total, !wide && { fontSize: 38 }]}>{formatCurrency(data.total)}</Text>
-              <Text style={styles.heroHint}>Incluye pendientes y aprobadas · excluye rechazadas</Text>
-              <View style={styles.compare}><Ionicons name="analytics-outline" size={16} color="#B7F2E2" /><Text style={styles.compareText}>{data.changePercent === null ? (data.total > 0 ? `Sin gasto registrado en el ${data.comparisonLabel}` : 'Tu próximo registro empieza aquí') : `${data.changePercent > 0 ? '+' : ''}${data.changePercent}% respecto al ${data.comparisonLabel}`}</Text></View>
+        <View style={grid}>
+          <View style={[s.hero, wide && { flex: 1.5 }]}>
+            <Text style={s.heroLabel}>{company ? 'Gasto de la empresa' : 'Mi gasto'} · {mode === 'year' ? data.periodLabel : monthLabel(month)}</Text>
+            <Text style={[s.heroTotal, wide && { fontSize: 46, lineHeight: 54 }]} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(data.total)}</Text>
+            <View style={[kit.row, { gap: 7 }]}>
+              <Ionicons name={data.changePercent === null ? 'remove-outline' : data.changePercent > 0 ? 'trending-up-outline' : 'trending-down-outline'} size={18} color={Colors.sunny} />
+              <Text style={s.heroHint}>{data.changePercent === null ? `Sin gasto en el ${data.comparisonLabel}` : `${data.changePercent > 0 ? '+' : ''}${data.changePercent}% que el ${data.comparisonLabel}`}</Text>
             </View>
-            <View style={styles.heroFooter}>
-              <View><Text style={styles.heroSmallLabel}>{mode === 'year' ? 'BOLETAS DEL AÑO' : 'BOLETAS DEL MES'}</Text><Text style={styles.heroSmallValue}>{data.receiptCount}</Text></View>
-              <View><Text style={styles.heroSmallLabel}>NETO REGISTRADO</Text><Text style={styles.heroSmallValue}>{formatCurrency(data.net)}</Text></View>
-              <View><Text style={styles.heroSmallLabel}>IVA REGISTRADO</Text><Text style={styles.heroSmallValue}>{formatCurrency(data.vat)}</Text></View>
+            <View style={s.heroFooter}>
+              {[['Boletas', String(data.receiptCount)], ['Total sin IVA', formatCurrency(data.net)], ['IVA', formatCurrency(data.vat)]].map(([label, value]) => <View key={label} style={{ minWidth: 80, flexGrow: 1 }}><Text style={s.heroSmall}>{label}</Text><Text style={s.heroValue}>{value}</Text></View>)}
             </View>
+            <Text style={s.heroSmall}>Pendientes y aprobadas; no incluye rechazadas.</Text>
           </View>
-          <View style={[styles.actionCard, wide && { flex: 1 }]}>
-            <View style={styles.actionIcon}><Ionicons name="scan-outline" size={24} color="#0F8277" /></View>
-            <View style={{ gap: 8 }}><Text style={styles.cardTitle}>Un gasto menos{ '\n' }por recordar.</Text><Text style={styles.body}>Fotografía tu boleta y regístrala al momento. Tu respaldo queda junto a los de tu empresa.</Text></View>
-            <Pressable style={styles.primaryButton} accessibilityRole="button" onPress={() => router.push('/(protected)/expenses/new')}><Ionicons name="add" size={20} color="white" /><Text style={styles.primaryText}>Registrar boleta</Text></Pressable>
-          </View>
+          <Card style={wide ? { flex: 1, justifyContent: 'center' } : undefined}>
+            <SectionTitle title="Presupuesto" caption={mode === 'year' ? 'Meses transcurridos del año' : 'Del mes seleccionado'} action={admin ? <Button compact variant="ghost" title={data.budget ? 'Cambiar' : 'Definir'} onPress={() => router.push('/(protected)/budgets')} /> : undefined} />
+            <BudgetMeter budget={data.budget} admin={admin} />
+          </Card>
         </View>
 
-        <View style={styles.statusGrid}>{stateDesign.map(item => {
-          const state = data.states.find(value => value.status === item.status);
-          return <View key={item.status} style={styles.statusCard}>
-            <View style={[styles.statusIcon, { backgroundColor: item.background }]}><Ionicons name={item.icon} size={18} color={item.color} /></View>
-            <Text style={styles.statusNumber}>{state?.count ?? 0}</Text><Text style={styles.statusLabel}>{item.label}</Text><Text style={styles.statusAmount}>{formatCurrency(state?.amount ?? 0)}</Text>
-          </View>;
+        <View style={[kit.wrap, { gap: 12 }]}>{data.states.map(state => {
+          const design = statusDesign[state.status];
+          return <Pressable key={state.status} accessibilityRole="button" accessibilityLabel={`${design.plural}: ${state.count}`} onPress={() => openList(state.status)} style={({ pressed }) => [kit.card, s.state, pressed && { borderColor: Colors.primary }]}>
+            <View style={kit.between}><IconTile icon={design.icon} tone={design.tone} size={36} /><Text style={{ fontSize: 26, fontWeight: '800' }}>{state.count}</Text></View>
+            <View><Text style={{ fontSize: 13, fontWeight: '700' }}>{design.plural}</Text><Text style={kit.caption}>{formatCurrency(state.amount)}</Text></View>
+          </Pressable>;
         })}</View>
 
-        <View style={styles.attention}>
-          <Ionicons name={data.pendingAllTime ? 'time-outline' : 'checkmark-circle-outline'} size={23} color="#0F8277" />
-          <Text style={styles.attentionText}>{data.pendingAllTime ? `${data.pendingAllTime} boleta${data.pendingAllTime === 1 ? '' : 's'} pendiente${data.pendingAllTime === 1 ? '' : 's'} en total, considerando todos los meses. ${admin ? 'Puedes revisarlas desde su detalle.' : 'Todavía puedes corregir sus datos.'}` : 'No hay boletas pendientes. Todo está al día con las revisiones.'}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Ver listado de boletas" onPress={goExpenses}><Ionicons name="arrow-forward" size={20} color="#0F8277" /></Pressable>
+        <View style={grid}>
+          <Card style={wide ? { flex: 1 } : undefined}><SectionTitle title="En qué se gasta" caption="Por tipo de gasto" /><CategoryBars groups={data.categories.map(item => ({ ...item, name: typeName(item.name) }))} total={data.total} /></Card>
+          <Card style={wide ? { flex: 1 } : undefined}><SectionTitle title="Mes a mes" caption={mode === 'year' ? 'Meses del año seleccionado' : 'Últimos seis meses'} /><MonthBars points={data.trend} /></Card>
         </View>
 
-        <View style={[styles.topGrid, { flexDirection: wide ? 'row' : 'column' }]}>
-          <View style={[styles.panel, wide && { flex: 1 }]}>
-            <View><Text style={styles.panelTitle}>¿En qué se ha gastado?</Text><Text style={styles.panelCaption}>Distribución {mode === 'year' ? 'del año' : 'del mes'} · pendientes y aprobadas</Text></View>
-            {data.categories.length ? <>
-              <View style={styles.stackBar}>{data.categories.map((category, index) => <View key={category.name} style={{ width: `${data.total ? category.amount / data.total * 100 : 0}%`, backgroundColor: dashboardPalette[index % dashboardPalette.length] }} />)}</View>
-              {data.categories.map((category, index) => <View key={category.name}>
-                <View style={styles.row}><View style={[styles.brand, { gap: 8 }]}><View style={[styles.categoryDot, { backgroundColor: dashboardPalette[index % dashboardPalette.length] }]} /><Text style={styles.categoryName}>{category.name}</Text></View><Text style={styles.categoryAmount}>{formatCurrency(category.amount)}</Text></View>
-                <View style={styles.categoryTrack}><View style={{ height: 5, width: `${data.total ? category.amount / data.total * 100 : 0}%`, backgroundColor: dashboardPalette[index % dashboardPalette.length] }} /></View>
-                <Text style={[styles.panelCaption, { marginTop: 6 }]}>{category.count} boleta{category.count !== 1 ? 's' : ''} · {data.total ? Math.round(category.amount / data.total * 100) : 0}% del gasto</Text>
-              </View>)}
-            </> : <Text style={styles.empty}>Aún no hay gastos pendientes o aprobados en este período. Registra tu primera boleta para ver la distribución.</Text>}
-          </View>
-          <View style={[styles.panel, wide && { flex: 1 }]}>
-            <View><Text style={styles.panelTitle}>Tu gasto en perspectiva</Text><Text style={styles.panelCaption}>{mode === 'year' ? 'Gasto por mes del año seleccionado' : 'Últimos 6 meses hasta el período seleccionado'}</Text></View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={mode === 'year'} contentContainerStyle={{ flexGrow: 1 }}>
-            <View style={[styles.trendChart, { flexGrow: 1, minWidth: mode === 'year' ? data.trend.length * 44 : 240 }]}>{data.trend.map((point, index) => <View key={point.month} style={styles.trendColumn} accessible accessibilityLabel={`${monthLabel(point.month)}: ${formatCurrency(point.amount)}`}>
-              <Text style={styles.trendValue}>{compact(point.amount)}</Text><View style={styles.trendTrack}><View style={[styles.trendBar, { height: point.amount ? Math.max(5, point.amount / maxTrend * 110) : 2, backgroundColor: index === data.trend.length - 1 ? '#0D9488' : '#CDD5F7' }]} /></View><Text style={styles.trendLabel}>{monthLabel(point.month, true)}</Text>
-            </View>)}</View></ScrollView>
-            <View style={{ borderTopWidth: 1, borderTopColor: '#EEF1F6', paddingTop: 16, gap: 5 }}><Text style={[styles.body, { textTransform: 'capitalize' }]}>{data.comparisonLabel}</Text><Text style={styles.cardTitle}>{formatCurrency(data.previousTotal)}</Text><Text style={styles.panelCaption}>Comparar te ayuda a anticipar tus próximos gastos.</Text></View>
-          </View>
-        </View>
-
-        <View style={styles.panel}>
-          <View style={styles.row}><View><Text style={styles.panelTitle}>Últimas boletas</Text><Text style={styles.panelCaption}>Del período seleccionado · más recientes primero</Text></View><Pressable accessibilityRole="button" onPress={goExpenses}><Text style={styles.link}>Ver todas →</Text></Pressable></View>
-          {data.recent.length ? data.recent.map(receipt => <Pressable accessibilityRole="button" accessibilityLabel={`Ver boleta ${receipt.receiptNumber}`} key={receipt.id} style={styles.recentRow} onPress={() => router.push({ pathname: '/(protected)/expenses/[id]', params: { id: receipt.id } })}>
-            <View style={styles.receiptIcon}><Ionicons name="receipt-outline" size={21} color="#64748B" /></View>
-            <View style={{ flex: 1, gap: 4 }}><Text style={styles.categoryName}>{receipt.type}</Text><Text style={styles.panelCaption}>N.º {receipt.receiptNumber} · {receipt.date.split('-').reverse().join('/')}</Text></View>
-            <View style={{ alignItems: 'flex-end', gap: 6 }}><Text style={styles.categoryAmount}>{formatCurrency(receipt.total)}</Text><ExpenseStatus status={receipt.status} /></View>
-          </Pressable>) : <Text style={styles.empty}>No hay boletas en este período. Puedes registrar una nueva o consultar otra fecha.</Text>}
-        </View>
-        <Text style={styles.footnote}>Montos en CLP · {data.scope === 'company' ? 'Resumen de tu empresa' : 'Resumen de tus propias boletas'}{ '\n' }Actualizado a las {new Date(data.generatedAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}</Text>
+        <Card>
+          <SectionTitle title="Últimas boletas" caption="Del período seleccionado" action={<Button compact variant="ghost" title="Ver todas" onPress={() => openList()} />} />
+          {data.recent.length ? data.recent.map(receipt => <Pressable key={receipt.id} accessibilityRole="button" accessibilityLabel={`Ver boleta ${receipt.receiptNumber}`} style={({ pressed }) => [s.recent, pressed && { backgroundColor: Colors.surfaceMuted }]}
+            onPress={() => router.push({ pathname: '/(protected)/expenses/[id]', params: { id: receipt.id } })}>
+            <IconTile icon={typeIcon(receipt.type)} />
+            <View style={{ flex: 1, gap: 2 }}><Text numberOfLines={1} style={{ fontWeight: '700', fontSize: 14 }}>{receipt.supplier ?? typeName(receipt.type)}</Text><Text numberOfLines={1} style={kit.caption}>N.º {receipt.receiptNumber} · {readableDate(receipt.date)}</Text></View>
+            <View style={{ alignItems: 'flex-end', gap: 5 }}><Text style={{ fontWeight: '700', fontSize: 14 }}>{formatCurrency(receipt.total)}</Text><ExpenseStatus status={receipt.status} /></View>
+          </Pressable>) : <EmptyState icon="receipt-outline" title="Sin boletas en este período">Registra una boleta o elige otra fecha.</EmptyState>}
+        </Card>
       </> : null}
     </RefreshableScrollView>
   </View>;
 }
+
+const s = StyleSheet.create({
+  attention: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 14, borderRadius: BorderRadius.xl, backgroundColor: Colors.warningSoft },
+  hero: { backgroundColor: Colors.ink, borderRadius: BorderRadius.xxl, padding: 24, gap: 10, justifyContent: 'center' },
+  heroLabel: { color: Colors.inkSoft, fontSize: 13, fontWeight: '600' },
+  heroTotal: { color: Colors.white, fontSize: 38, lineHeight: 46, fontWeight: '800', letterSpacing: -1 },
+  heroHint: { color: Colors.white, fontSize: 13, flexShrink: 1 },
+  heroFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, borderTopWidth: 1, borderTopColor: '#1F5C5E', paddingTop: 16, marginTop: 6 },
+  heroSmall: { color: Colors.inkSoft, fontSize: 12, lineHeight: 17 },
+  heroValue: { color: Colors.white, fontSize: 15, fontWeight: '700' },
+  state: { flex: 1, minWidth: 104, padding: 14, gap: 10 },
+  recent: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 11, borderTopWidth: 1, borderTopColor: Colors.border },
+});

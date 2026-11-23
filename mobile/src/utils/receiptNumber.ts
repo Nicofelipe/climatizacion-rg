@@ -20,12 +20,12 @@ export function receiptNumberCandidates(lines:string[]):Set<string> {
  const named=new Set<string>(),fallback=new Set<string>();
  for(let index=0;index<lines.length;index++){
   const line=lines[index];
-  for(const label of line.matchAll(/\b(?:BOLETA(?=\b|ELECTRONICA|N(?:RO|UMERO|O|[°º])|\d)|BOL(?:\.|\b))/g)){
+  for(const label of line.matchAll(/\b(?:BOLETA(?=\b|ELECTRONICA|N(?:RO|UMERO|O|[°º])|\d)|BOL(?:\.|\b)|FACTURA(?=\b|ELECTRONICA|N(?:RO|UMERO|O|[°º])))/g)){
    let explicit=beforeLabel.test(line.slice(0,label.index));
    if(!line.slice(0,label.index).trim()&&index>0)explicit ||= beforeLabel.test(lines[index-1]);
    for(let offset=0;offset<=3&&index+offset<lines.length;offset++){
     let part=offset===0?line.slice(label.index+label[0].length):lines[index+offset];
-    part=part.replace(punctuation,'').replace(/^(?:ELECTRONICA|ELECTR\.?|ELEC\.?)\s*/,'').replace(punctuation,'');
+    part=part.replace(punctuation,'').replace(/^(?:(?:NO\s+AFECTA\s+O\s+)?(?:EXENTA|AFECTA)\s+)?(?:ELECTRONICA|ELECTR\.?|ELEC\.?)?\s*(?:(?:NO\s+AFECTA\s+O\s+)?EXENTA\s*)?/,'').replace(punctuation,'');
     const numbered=part.match(marker);
     if(numbered){explicit=true;part=part.slice(numbered[0].length);}
     if(!part.trim())continue;

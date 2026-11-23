@@ -1,52 +1,125 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
-import Input from '@/components/ui/Input';
+import { StyleSheet, View } from 'react-native';
+import type { ExpenseDetail, VatSource } from '@/api/expense.api';
+import { API_URL, authorized, jsonBody, requestJson } from '@/api/http';
 import Button from '@/components/ui/Button';
-import { requestJson } from '@/api/http';
+import Input from '@/components/ui/Input';
+import Text from '@/components/ui/Text';
+import { Banner, Card, SectionTitle, Segmented, Sheet, styles as kit } from '@/components/ui/kit';
+import { expenseTypeOf } from '@/constants/expenseTypes';
 import { Colors } from '@/theme';
-import { formatCurrency } from '@/utils/currency';
+import { amountDigits, formatCurrency, groupDigits } from '@/utils/currency';
+import { dateTime, shortDate } from '@/utils/dates';
+import { todayReceiptDate } from '@/utils/receiptDate';
+import ReceiptDateFilter from './ReceiptDateFilter';
 
-interface Entry { Id:number; Action:string; Actor:string|null; CreatedAt:string; BeforeData:string|null; AfterData:string|null; Reason:string|null }
-export default function ExpenseHistory({id,token,admin,status,date,amount,syncPending,onChanged}:{id:number;token:string;admin:boolean;status:string;date:string;amount:number;syncPending?:boolean;onChanged:()=>void}) {
-  const [entries,setEntries]=useState<Entry[]>([]);
-  const [editing,setEditing]=useState(false);
-  const [nextDate,setNextDate]=useState(date.slice(0,10));
-  const [nextAmount,setNextAmount]=useState(String(amount));
-  const [reason,setReason]=useState('');
-  const [message,setMessage]=useState('');
-  const [error,setError]=useState('');
-  const [busy,setBusy]=useState(false);
-  const url=`${process.env.EXPO_PUBLIC_API_URL}/expenses/${id}`;
-  const headers={Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
-  useEffect(()=>{let active=true;requestJson(`${url}/history`,{headers:{Authorization:`Bearer ${token}`}}).then(result=>{if(active)setEntries(result.history);}).catch(()=>{if(active)setError('No fue posible cargar el historial.');});return()=>{active=false;};},[url,token]);
-  async function save(sync=false){
-    if(busy)return;setError('');setMessage('');
-    if(!sync&&(!reason.trim()||!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)||!/^\d+$/.test(nextAmount)||Number(nextAmount)<=0)){setError('Completa fecha AAAA-MM-DD, monto entero positivo y motivo.');return;}
-    setBusy(true);
-    try{const result=await requestJson(`${url}/${sync?'sync':'corrections'}`,{method:'POST',headers,...(!sync?{body:JSON.stringify({expenseDate:nextDate,totalAmount:Number(nextAmount),reason,expectedDate:date.slice(0,10),expectedAmount:amount})}:{})},90000);setMessage(result.message);setEditing(false);onChanged();}
-    catch(err){setError(err instanceof Error?err.message:'No fue posible guardar.');}finally{setBusy(false);}
-  }
-  const snapshot=(json:string|null)=>{try{return json?JSON.parse(json):null;}catch{return null;}};
-  return <View style={{gap:16,backgroundColor:'white',borderRadius:20,padding:20,borderWidth:1,borderColor:Colors.border}}>
-    <Text style={{fontSize:18,fontWeight:'700',color:Colors.text}}>Historial de la boleta</Text>
-    {syncPending?<><Text style={{color:'#A7670B'}}>La fecha se corrigió. El movimiento del respaldo en Drive está pendiente.</Text>{admin?<Button title="Reintentar sincronización de Drive" onPress={()=>save(true)} loading={busy}/>:null}</>:null}
-    {admin&&status==='APPROVED'&&!syncPending?<>{editing?<>
-      <Text style={{color:Colors.textSecondary}}>La corrección conserva el estado de revisión y la imagen. Quedarán registrados tu nombre, el motivo y los valores anteriores y nuevos.</Text>
-      <Input label="Fecha de la boleta (AAAA-MM-DD)" value={nextDate} onChangeText={setNextDate}/>
-      <Input label="Monto total en CLP" value={nextAmount} onChangeText={setNextAmount} keyboardType="numeric"/>
-      <Input label="Motivo de la corrección (obligatorio)" value={reason} onChangeText={value=>setReason(value.slice(0,1000))}/>
-      <Button title="Guardar corrección con historial" onPress={()=>save()} loading={busy}/>
-      <Button title="Cancelar corrección" onPress={()=>{setEditing(false);setError('');}} disabled={busy}/>
-    </>:<Button title="Corrección excepcional de fecha o monto" onPress={()=>{setNextDate(date.slice(0,10));setNextAmount(String(amount));setReason('');setEditing(true);}}/>}</>:null}
-    {message?<Text accessibilityRole="alert" style={{color:Colors.primary}}>{message}</Text>:null}
-    {error?<Text accessibilityRole="alert" style={{color:Colors.danger}}>{error}</Text>:null}
-    {entries.map(entry=>{const before=snapshot(entry.BeforeData),after=snapshot(entry.AfterData);return <View key={entry.Id} style={{gap:7,paddingVertical:12,borderTopWidth:1,borderColor:Colors.border}}>
-      <Text style={{fontWeight:'700',color:Colors.text}}>{({AUTO_APPROVE_SOLE_ADMIN:'Aprobación automática · administrador único',SELF_APPROVE_EXPENSE:'Confirmación propia · administrador único',CORRECT_EXPENSE:'Corrección administrativa',UPDATE_EXPENSE:'Edición de boleta',ROLLBACK_EXPENSE:'Edición revertida',APPROVE_EXPENSE:'Aprobación',REJECT_EXPENSE:'Rechazo'} as Record<string,string>)[entry.Action]??entry.Action}</Text>
-      <Text style={{color:Colors.textSecondary,fontSize:12}}>{entry.Actor??'Usuario registrado'} · {new Date(entry.CreatedAt.endsWith('Z')?entry.CreatedAt:`${entry.CreatedAt}Z`).toLocaleString('es-CL')}</Text>
-      {entry.Reason?<Text style={{color:Colors.text}}>Motivo: {entry.Reason}</Text>:null}
-      {before&&after?<><Text style={{color:Colors.text}}>Fecha: {String(before.ExpenseDate).slice(0,10)} → {String(after.ExpenseDate).slice(0,10)}</Text><Text style={{color:Colors.text}}>Total: {formatCurrency(Number(before.TotalAmount))} → {formatCurrency(Number(after.TotalAmount))}</Text></>:null}
-      {before&&after?(['ReceiptNumber','ExpenseTypeId','SupplierId','Description'] as const).filter(field=>before[field]!==after[field]).map(field=><Text key={field} style={{color:Colors.text}}>{({ReceiptNumber:'Código',ExpenseTypeId:'Tipo de gasto (ID)',SupplierId:'Proveedor (ID)',Description:'Descripción'})[field]}: {String(before[field]??'Sin dato')} → {String(after[field]??'Sin dato')}</Text>):null}
-    </View>;})}
-    {!entries.length&&!error?<Text style={{color:Colors.textSecondary}}>Aún no hay movimientos registrados.</Text>:null}
-  </View>;
+interface Entry { Id: number; Action: string; Actor: string | null; CreatedAt: string; BeforeData: string | null; AfterData: string | null; Reason: string | null }
+
+const actions: Record<string, string> = {
+  AUTO_APPROVE_SOLE_ADMIN: 'Aprobación automática (único administrador)', SELF_APPROVE_EXPENSE: 'Confirmación propia (único administrador)',
+  CORRECT_EXPENSE: 'Corrección administrativa', UPDATE_EXPENSE: 'Edición', ROLLBACK_EXPENSE: 'Edición revertida',
+  APPROVE_EXPENSE: 'Aprobación', REJECT_EXPENSE: 'Rechazo', SOFT_DELETE_EXPENSE: 'Boleta retirada',
+};
+const vatNames: Record<string, string> = { CALCULATED: '19% incluido', RECEIPT: 'impreso', EXEMPT: 'exento', NOT_STATED: 'no informado' };
+const snapshot = (json: string | null) => { try { return json ? JSON.parse(json) as Record<string, unknown> : null; } catch { return null; } };
+
+/** Solo lo que cambió, en palabras. */
+export function describeChanges(before: Record<string, unknown> | null, after: Record<string, unknown> | null) {
+  if (!before || !after) return [];
+  const money = (value: unknown) => formatCurrency(Number(value));
+  const fields: [string, string, (value: unknown) => string][] = [
+    ['ExpenseDate', 'Fecha', value => shortDate(String(value))], ['TotalAmount', 'Total', money], ['VatAmount', 'IVA', money],
+    ['VatSource', 'Origen del IVA', value => vatNames[String(value)] ?? String(value)], ['ReceiptNumber', 'Número', String],
+    ['DocumentType', 'Documento', value => value === 'FACTURA' ? 'Factura' : 'Boleta'],
+    ['ExpenseTypeId', 'Tipo', value => expenseTypeOf(Number(value))?.name ?? String(value)],
+    ['SupplierId', 'Comercio', value => value ? 'otro comercio' : 'sin comercio'], ['Description', 'Descripción', value => value ? String(value) : 'vacía'],
+  ];
+  return fields.filter(([key]) => key in after && before[key] !== undefined && before[key] !== after[key] || (key in after && !(key in before) && key !== 'VatSource' && key !== 'DocumentType'))
+    .map(([key, label, show]) => key === 'SupplierId' ? 'Comercio modificado' : `${label}: ${before[key] === undefined ? '—' : show(before[key])} → ${show(after[key])}`);
 }
+
+export default function ExpenseHistory({ expense, token, admin, onChanged }: { expense: ExpenseDetail; token: string; admin: boolean; onChanged: () => void }) {
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState('');
+  const [amount, setAmount] = useState('');
+  const [vatSource, setVatSource] = useState<VatSource>('CALCULATED');
+  const [vat, setVat] = useState('');
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const url = `${API_URL}/expenses/${expense.Id}`;
+
+  useEffect(() => {
+    let active = true;
+    requestJson(`${url}/history`, { headers: authorized(token) }).then(result => { if (active) setEntries(result.history); }).catch(() => { if (active) setError('No fue posible cargar el historial.'); });
+    return () => { active = false; };
+  }, [url, token]);
+
+  function start() {
+    setDate(expense.ExpenseDate.slice(0, 10));
+    setAmount(String(Number(expense.TotalAmount)));
+    setVatSource(expense.VatSource);
+    setVat(expense.VatSource === 'RECEIPT' ? String(Number(expense.VatAmount)) : '');
+    setReason('');
+    setError('');
+    setEditing(true);
+  }
+  async function run(path: string, body?: unknown) {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await requestJson(`${url}/${path}`, body ? jsonBody(token, body) : { method: 'POST', headers: authorized(token) }, 90000);
+      setMessage(result.message);
+      setEditing(false);
+      onChanged();
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'No fue posible guardar.'); }
+    finally { setBusy(false); }
+  }
+  function save() {
+    if (!reason.trim()) { setError('Escribe el motivo de la corrección.'); return; }
+    if (!Number(amount)) { setError('El total debe ser mayor que cero.'); return; }
+    if (vatSource === 'RECEIPT' && !Number(vat)) { setError('Copia el IVA que muestra el documento.'); return; }
+    void run('corrections', {
+      expenseDate: date, totalAmount: Number(amount), reason, expectedDate: expense.ExpenseDate.slice(0, 10), expectedAmount: Number(expense.TotalAmount),
+      vatSource, ...(vatSource === 'RECEIPT' ? { vatAmount: Number(vat) } : {}),
+    });
+  }
+
+  return <Card>
+    <SectionTitle title="Historial" />
+    {expense.DriveSyncPending && admin ? <Banner tone="warning" action={<Button compact variant="secondary" title="Reintentar sincronización" loading={busy} style={{ alignSelf: 'flex-start' }} onPress={() => { void run('sync'); }} />}>El respaldo de la foto está pendiente.</Banner> : null}
+    {message ? <Banner tone="success">{message}</Banner> : null}
+    {error && !editing ? <Banner tone="danger">{error}</Banner> : null}
+    {entries.map(entry => <View key={entry.Id} style={s.entry}>
+      <View style={s.dot} />
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ fontWeight: '700', fontSize: 14 }}>{actions[entry.Action] ?? entry.Action}</Text>
+        <Text style={kit.caption}>{entry.Actor ?? 'Usuario registrado'} · {dateTime(entry.CreatedAt)}</Text>
+        {entry.Reason ? <Text style={{ fontSize: 13, lineHeight: 19, color: Colors.textSecondary }}>{entry.Reason}</Text> : null}
+        {describeChanges(snapshot(entry.BeforeData), snapshot(entry.AfterData)).map(change => <Text key={change} style={{ fontSize: 13, lineHeight: 19 }}>{change}</Text>)}
+      </View>
+    </View>)}
+    {!entries.length && !error ? <Text style={kit.subtitle}>Aún no hay movimientos.</Text> : null}
+    {admin && expense.Status === 'APPROVED' && !expense.DriveSyncPending ? <Button variant="ghost" icon="construct-outline" title="Corregir fecha, total o IVA" onPress={start} /> : null}
+
+    <Sheet visible={editing} title="Corrección administrativa" onClose={() => { if (!busy) setEditing(false); }}
+      footer={<View style={{ flexDirection: 'row', gap: 10 }}><Button title="Cancelar" variant="secondary" style={{ flex: 1 }} disabled={busy} onPress={() => setEditing(false)} /><Button title="Guardar" style={{ flex: 1 }} loading={busy} onPress={save} /></View>}>
+      <Text style={kit.subtitle}>La boleta sigue aprobada. Quedan registrados tu nombre, el motivo y los valores anteriores.</Text>
+      <ReceiptDateFilter field label="Fecha de la boleta" value={date} onChange={setDate} clearable={false} maxDate={todayReceiptDate()} />
+      <Input label="Total" prefix="$" value={groupDigits(amount)} onChangeText={text => setAmount(amountDigits(text))} keyboardType="number-pad" />
+      <Segmented label="IVA" value={vatSource} onChange={setVatSource} options={[{ value: 'CALCULATED', label: '19%' }, { value: 'RECEIPT', label: 'Impreso' }, { value: 'EXEMPT', label: 'Exenta' }, { value: 'NOT_STATED', label: 'No indica' }]} />
+      {vatSource === 'RECEIPT' ? <Input label="IVA impreso" prefix="$" value={groupDigits(vat)} onChangeText={text => setVat(amountDigits(text))} keyboardType="number-pad" /> : null}
+      <Input label="Motivo (obligatorio)" value={reason} onChangeText={setReason} multiline maxLength={1000} />
+      {error ? <Banner tone="danger">{error}</Banner> : null}
+    </Sheet>
+  </Card>;
+}
+
+const s = StyleSheet.create({
+  entry: { flexDirection: 'row', gap: 12 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginTop: 5, backgroundColor: Colors.brand },
+});

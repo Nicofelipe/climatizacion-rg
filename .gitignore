@@ -21,3 +21,8 @@ backend/uploads/
 artifacts/
 mobile/modules/**/android/build/
 mobile/modules/**/android/.gradle/
+
+# Compilación, fotos locales y datos del servidor
+backend/dist/
+backend/receipts/
+deploy/data/

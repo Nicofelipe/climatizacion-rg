@@ -68,7 +68,7 @@ export async function getStorageController(
         console.error('Get storage error:', error);
 
         res.status(500).json({
-            message: 'Internal server error',
+            message: 'No fue posible completar la operación.',
         });
     }
 }
@@ -93,7 +93,7 @@ export async function updateGoogleDriveStorageController(
         console.error('Update storage error:', error);
 
         res.status(500).json({
-            message: 'Internal server error',
+            message: 'No fue posible completar la operación.',
         });
     }
 }
@@ -146,7 +146,7 @@ export async function connectGoogleDriveController(
     );
 
     res.status(500).json({
-      message: 'Internal server error',
+      message: 'No fue posible completar la operación.',
     });
   }
 }

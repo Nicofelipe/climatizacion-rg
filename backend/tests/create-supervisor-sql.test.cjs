@@ -1,6 +1,6 @@
 require('dotenv').config({quiet:true});require('tsx/cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),driver=require('msnodesqlv8');
-const cs='Driver={ODBC Driver 18 for SQL Server};Server='+process.env.DB_SERVER+';Database='+process.env.DB_DATABASE+';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs=require('./fixtures/connection.cjs');
 const fixture=`SET NOCOUNT ON;
 CREATE TABLE #Role(Id int,Name nvarchar(20),IsActive bit);
 CREATE TABLE #AppUser(Id int IDENTITY(10,1),CompanyId int,RoleId int,FirstName nvarchar(100),LastName nvarchar(100),Email nvarchar(254),PasswordHash nvarchar(255),Phone nvarchar(30),Rut nvarchar(12),IsActive bit,MustChangePassword bit,CreatedAt datetime2 DEFAULT SYSUTCDATETIME());

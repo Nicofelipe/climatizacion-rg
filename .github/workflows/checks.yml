@@ -1,0 +1,82 @@
+name: Verificaciones
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-22.04
+    services:
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_PID: Express
+          # Clave solo para la base desechable de esta verificación.
+          MSSQL_SA_PASSWORD: Verificacion_2026_x
+          TZ: America/Santiago
+        ports: ["1433:1433"]
+    env:
+      DB_SERVER: "127.0.0.1,1433"
+      DB_DATABASE: ClepitBoletas_Test
+      TEST_DATABASE: ClepitBoletas_Test
+      DB_USER: sa
+      DB_PASSWORD: Verificacion_2026_x
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            mobile/package-lock.json
+      - name: Controlador ODBC 18
+        run: |
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc >/dev/null
+          curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list >/dev/null
+          sudo apt-get update && sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+      # Las pruebas del backend también cubren la lectura de boletas, que vive en mobile/.
+      - run: npm ci
+        working-directory: mobile
+      - run: npm ci
+        working-directory: backend
+      - run: npm run typecheck && npm run build
+        working-directory: backend
+      - name: Base desechable con las migraciones reales
+        working-directory: backend
+        run: |
+          for i in $(seq 1 30); do npm run -s migrate -- --create && exit 0; sleep 4; done; exit 1
+      - run: npm test
+        working-directory: backend
+
+  web:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+        working-directory: mobile
+      - run: npm run typecheck
+        working-directory: mobile
+      - run: npm run build:web
+        working-directory: mobile
+
+  imagen:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t clepit-boletas .
+      - name: La imagen inicia y sirve la web
+        run: |
+          docker run -d --name b -p 8080:8080 -e JWT_SECRET=verificacion-de-la-imagen-0000000000000 -e GOOGLE_CLIENT_ID=x -e GOOGLE_CLIENT_SECRET=x -e GOOGLE_REDIRECT_URI=http://localhost/cb clepit-boletas
+          sleep 6
+          curl -fsS http://localhost:8080/login | grep -q '<html' && curl -fsS http://localhost:8080/ocr/spa.traineddata.gz -o /dev/null
+          docker run --rm clepit-boletas node -e "require('msnodesqlv8')"

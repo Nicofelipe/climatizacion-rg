@@ -1,94 +1,42 @@
 import bcrypt from 'bcryptjs';
-import msnodesqlv8 from 'msnodesqlv8';
+import { executeQuery } from '../database/sqlServer';
+import { passwordSession, recordSuccessfulLogin } from './passwordPolicy.service';
 
-import { recordSuccessfulLogin,passwordSession } from './passwordPolicy.service';
-// Match the password work factor even when the mailbox is unknown.
-const dummyHash=bcrypt.hashSync('unregistered-account-placeholder',12);
-
-const connectionString =
-    'Driver={ODBC Driver 18 for SQL Server};' +
-    `Server=${process.env.DB_SERVER};` +
-    `Database=${process.env.DB_DATABASE};` +
-    'Trusted_Connection=Yes;' +
-    'TrustServerCertificate=Yes;';
+// Mismo costo que una clave real, para que un correo desconocido no responda más rápido.
+const dummyHash = bcrypt.hashSync('unregistered-account-placeholder', 12);
+const MAX_ACCOUNTS = 5;
 
 interface LoginUserRow {
-    Id: number;
-    CompanyId: number;
-    RoleId: number;
-    FirstName: string;
-    LastName: string;
-    Email: string;
-    PasswordHash: string;
-    IsActive:boolean;
-    RoleName: string;
+  Id: number; CompanyId: number; CompanyName: string; FirstName: string; LastName: string;
+  Email: string; PasswordHash: string; IsActive: boolean; RoleName: string;
 }
 
-type QueryParams = NonNullable<
-    Parameters<typeof msnodesqlv8.query>[2]
->;
-
-function query<T>(
-    sql: string,
-    params: QueryParams
-): Promise<T[]> {
-    return new Promise((resolve, reject) => {
-        msnodesqlv8.query(connectionString, sql, params, (error, rows) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-
-            resolve(rows as T[]);
-        });
-    });
+/** El mismo correo y clave abre más de una empresa: la persona debe elegir a cuál entrar. */
+export class CompanySelectionError extends Error {
+  constructor(public companies: { id: number; name: string }[]) { super('COMPANY_SELECTION_REQUIRED'); }
 }
 
-export async function loginService(email: string, password: string) {
-    const users = await query<LoginUserRow>(
-        `
-      SELECT
-        u.Id,
-        u.CompanyId,
-        u.RoleId,
-        u.FirstName,
-        u.LastName,
-        u.Email,
-        u.PasswordHash,
-        u.IsActive,
-        r.Name AS RoleName
+export async function loginService(email: string, password: string, companyId?: number) {
+  const users = await executeQuery<LoginUserRow>(`
+      SELECT u.Id,u.CompanyId,c.Name AS CompanyName,u.FirstName,u.LastName,u.Email,u.PasswordHash,u.IsActive,r.Name AS RoleName
       FROM dbo.AppUser AS u
-      INNER JOIN dbo.Role AS r
-        ON r.Id = u.RoleId
-      INNER JOIN dbo.Company AS c
-        ON c.Id = u.CompanyId
-      WHERE u.Email = ?
-        AND r.IsActive = 1
-        AND c.IsActive = 1;
-    `,
-        [email]
-    );
-
-    const user = users[0];
-
-    if (!user || users.length !== 1) {
-        await bcrypt.compare(password,dummyHash);
-        throw new Error('INVALID_CREDENTIALS');
-    }
-
-    const passwordMatches = await bcrypt.compare(
-        password,
-        user.PasswordHash
-    );
-
-    if (!passwordMatches) {
-        throw new Error('INVALID_CREDENTIALS');
-    }
-
-    if(!user.IsActive)throw new Error('ACCOUNT_INACTIVE');
-
-    const account=await recordSuccessfulLogin(user.CompanyId,user.Id,'PASSWORD');
-    if(account.PasswordHash!==user.PasswordHash)throw new Error('INVALID_CREDENTIALS');
-    return passwordSession(account);
-
+      INNER JOIN dbo.Role AS r ON r.Id=u.RoleId
+      INNER JOIN dbo.Company AS c ON c.Id=u.CompanyId
+      WHERE u.Email=? AND r.IsActive=1 AND c.IsActive=1;`, [email]);
+  const candidates = users.slice(0, MAX_ACCOUNTS);
+  if (!candidates.length) {
+    await bcrypt.compare(password, dummyHash);
+    throw new Error('INVALID_CREDENTIALS');
+  }
+  const matches: LoginUserRow[] = [];
+  for (const user of candidates) if (await bcrypt.compare(password, user.PasswordHash)) matches.push(user);
+  const allowed = matches.filter(user => companyId === undefined || user.CompanyId === companyId);
+  if (!allowed.length) throw new Error('INVALID_CREDENTIALS');
+  const active = allowed.filter(user => user.IsActive);
+  if (!active.length) throw new Error('ACCOUNT_INACTIVE');
+  if (active.length > 1) throw new CompanySelectionError(active.map(user => ({ id: user.CompanyId, name: user.CompanyName })));
+  const user = active[0];
+  const account = await recordSuccessfulLogin(user.CompanyId, user.Id, 'PASSWORD');
+  if (account.PasswordHash !== user.PasswordHash) throw new Error('INVALID_CREDENTIALS');
+  return passwordSession(account);
 }

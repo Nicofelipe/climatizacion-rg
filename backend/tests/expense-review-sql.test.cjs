@@ -4,8 +4,7 @@ require('tsx/cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const sql = require('msnodesqlv8');
-const cs = 'Driver={ODBC Driver 18 for SQL Server};Server=' + process.env.DB_SERVER +
-  ';Database=' + process.env.DB_DATABASE + ';Trusted_Connection=Yes;TrustServerCertificate=Yes;Connection Timeout=5;';
+const cs = require('./fixtures/connection.cjs');
 const fixture = require('./fixtures/notificationTable.cjs')+`SET NOCOUNT ON;
   CREATE TABLE #Role (Id int, Name nvarchar(20), IsActive bit);
   CREATE TABLE #AppUser (Id int, CompanyId int, RoleId int, IsActive bit);

@@ -3,10 +3,10 @@ import {AppState,Platform,Linking} from 'react-native';
 import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
-import {requestJson} from '@/api/http';
+import { API_URL, requestJson } from '@/api/http';
 import {notifyDataRefresh} from '@/utils/refreshEvents';
 Notifications.setNotificationHandler({handleNotification:async()=>({shouldShowBanner:true,shouldShowList:true,shouldPlaySound:true,shouldSetBadge:false})});
-const deviceRequest=(token:string,action:string,data:unknown)=>requestJson(`${process.env.EXPO_PUBLIC_API_URL}/notifications/devices/${action}`,{
+const deviceRequest=(token:string,action:string,data:unknown)=>requestJson(`${API_URL}/notifications/devices/${action}`,{
  method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(data)});
 export function usePushRegistration(token:string|null,onOpen:(id:number)=>void){
  const [status,setStatus]=useState('disabled'),[message,setMessage]=useState('Activa los notificaciones para recibir novedades con la aplicación cerrada.');

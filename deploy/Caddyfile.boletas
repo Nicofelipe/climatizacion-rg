@@ -1,0 +1,12 @@
+# Bloque para agregar al deploy/Caddyfile de la app Clepit (usa su misma sección "seguridad").
+# Después: docker compose -f <clepit>/deploy/docker-compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile
+boletas.clepit.cl {
+	import seguridad
+	# Solo para las empresas: que no aparezca en buscadores.
+	header X-Robots-Tag "noindex, nofollow"
+	# La foto máxima es de 10 MB; el resto es margen del formulario.
+	request_body {
+		max_size 12MB
+	}
+	reverse_proxy boletas:8080
+}

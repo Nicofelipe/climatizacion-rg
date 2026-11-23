@@ -1,9 +1,3 @@
-const BorderRadius = {
-  sm: 6,
-  md: 10,
-  lg: 16,
-  xl: 24,
-  round: 999,
-};
+const BorderRadius = { sm: 8, md: 12, control: 14, lg: 16, xl: 20, xxl: 28, round: 999 };
 
 export default BorderRadius;

@@ -1,7 +1,8 @@
 import FormScrollView from '@/components/common/FormScrollView';
 import { useState } from 'react';
 import { Redirect, router } from 'expo-router';
-import { Pressable,ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import Text from '@/components/ui/Text';
 import { createEmployeeApi } from '@/api/user.api';
 import AppContainer from '@/components/layout/AppContainer';
 import Button from '@/components/ui/Button';
@@ -57,7 +58,7 @@ export default function CreateEmployeeScreen() {
           <View style={{ gap: Spacing.lg }}>
             <Text accessibilityRole="alert" style={{ color: Colors.success }}>Integrante registrado correctamente como {role==='ADMIN'?'supervisor / administrador':'trabajador'}.</Text>
             <Text style={{ color: Colors.text }}>{email.trim().toLowerCase()} ya puede ingresar con su correo y contraseña. Comparte el acceso por un canal privado.</Text>
-            <Button title="Volver a mi cuenta" onPress={() => router.replace('/(protected)/(tabs)/profile')} />
+            <Button title="Volver al equipo" onPress={() => router.replace('/(protected)/(tabs)/employees')} />
           </View>
         ) : (
           <>
@@ -66,8 +67,8 @@ export default function CreateEmployeeScreen() {
             <Input label="Apellido" value={lastName} onChangeText={setLastName} />
             <Input label="RUT" value={rut} onChangeText={setRut} placeholder="12.345.678-5"/>
             <Input label="Correo de acceso" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="nombre@empresa.cl" />
-            <Text style={{color:Colors.text,fontWeight:'600'}}>Rol</Text><View style={{gap:8}}>{([{value:'EMPLOYEE',label:'Trabajador'},{value:'ADMIN',label:'Supervisor / administrador'}] as const).map(item=><Pressable key={item.value} accessibilityRole="radio" accessibilityState={{checked:role===item.value}} onPress={()=>setRole(item.value)} style={{padding:13,borderRadius:12,borderWidth:1,borderColor:role===item.value?Colors.primary:Colors.border,backgroundColor:role===item.value?'#E5F5EF':'white'}}><Text style={{color:role===item.value?Colors.primary:Colors.text,fontWeight:'600'}}>{role===item.value?'●':'○'} {item.label}</Text></Pressable>)}</View>
-            {role==='ADMIN'?<Text style={{color:'#A16207',fontSize:12,lineHeight:20}}>Podrá revisar boletas y gestionar personas de tu empresa. Al existir varios administradores activos, cada uno necesitará que otro apruebe sus propias boletas.</Text>:null}
+            <Text style={{color:Colors.text,fontWeight:'600'}}>Rol</Text><View style={{gap:8}}>{([{value:'EMPLOYEE',label:'Trabajador'},{value:'ADMIN',label:'Supervisor / administrador'}] as const).map(item=><Pressable key={item.value} accessibilityRole="radio" aria-checked={role===item.value} onPress={()=>setRole(item.value)} style={{padding:13,borderRadius:12,borderWidth:1,borderColor:role===item.value?Colors.primary:Colors.border,backgroundColor:role===item.value?Colors.primarySoft:'white'}}><Text style={{color:role===item.value?Colors.primary:Colors.text,fontWeight:'600'}}>{role===item.value?'●':'○'} {item.label}</Text></Pressable>)}</View>
+            {role==='ADMIN'?<Text style={{color:Colors.warning,fontSize:12,lineHeight:20}}>Podrá revisar boletas y gestionar personas de tu empresa. Al existir varios administradores activos, cada uno necesitará que otro apruebe sus propias boletas.</Text>:null}
             <Input label="Contraseña inicial (mínimo 8 caracteres)" value={password} onChangeText={value=>{setPassword(value);setError(null);}} secureTextEntry />
             <Text style={{color:Colors.textSecondary,fontSize:12,lineHeight:19}}>{passwordRequirementsMessage}</Text>
             <Input label="Repite la contraseña inicial" value={confirmPassword} onChangeText={value=>{setConfirmPassword(value);setError(null);}} secureTextEntry/>
@@ -76,7 +77,7 @@ export default function CreateEmployeeScreen() {
             <Input label="Teléfono (opcional)" value={phone} onChangeText={setPhone} />
             {error&&!(confirmPassword&&password!==confirmPassword)?<ErrorBanner message={error}/>:null}
             <Button title="Crear acceso" onPress={submit} loading={saving} />
-            <Button title="Volver" onPress={() => router.back()} disabled={saving} />
+            <Button variant="ghost" title="Volver" onPress={() => router.back()} disabled={saving} />
           </>
         )}
       </FormScrollView>

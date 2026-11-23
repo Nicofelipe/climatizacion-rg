@@ -1,34 +1,34 @@
 {
   "expo": {
-    "name": "Clepit",
+    "name": "Clepit Boletas",
     "slug": "climatizacion-rg",
-    "version": "1.1.2",
+    "version": "1.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-
     "icon": "./assets/images/clepit-icon.png",
-
     "scheme": "climatizacion-rg",
-
     "ios": {
       "bundleIdentifier": "cl.rg.climatizacion"
     },
-
     "android": {
-      "versionCode": 14,
+      "versionCode": 15,
       "softwareKeyboardLayoutMode": "resize",
       "package": "cl.rg.climatizacion",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/clepit-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
-
     "web": {
       "output": "static",
-      "favicon": "./assets/images/clepit-icon.png"
+      "favicon": "./assets/images/clepit-mark.png",
+      "name": "Clepit Gestión de Boletas",
+      "shortName": "Clepit Boletas"
     },
-
     "plugins": [
       "expo-sharing",
       "expo-router",
@@ -39,9 +39,17 @@
           "image": "./assets/images/clepit-icon.png",
           "imageWidth": 180
         }
+      ],
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Clepit usa la cámara para fotografiar tus boletas.",
+          "photosPermission": "Clepit usa tus fotos para adjuntar una boleta.",
+          "microphonePermission": false
+        }
       ]
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

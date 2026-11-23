@@ -1,13 +1,12 @@
-import { Text, View } from 'react-native';
+import { IconName, Pill, Tone } from '@/components/ui/kit';
 
-const statuses: Record<string, { label: string; color: string; background: string }> = {
-  PENDING: { label: 'Pendiente', color: '#854D0E', background: '#FEF3C7' },
-  REJECTED: { label: 'Rechazada', color: '#991B1B', background: '#FEE2E2' },
-  APPROVED: { label: 'Aprobada', color: '#166534', background: '#DCFCE7' },
+export const statusDesign: Record<string, { label: string; plural: string; tone: Tone; icon: IconName }> = {
+  PENDING: { label: 'Pendiente', plural: 'Pendientes', tone: 'warning', icon: 'time-outline' },
+  APPROVED: { label: 'Aprobada', plural: 'Aprobadas', tone: 'success', icon: 'checkmark-circle-outline' },
+  REJECTED: { label: 'Rechazada', plural: 'Rechazadas', tone: 'danger', icon: 'close-circle-outline' },
 };
+
 export default function ExpenseStatus({ status }: { status: string }) {
-  const item = statuses[status] ?? { label: status, color: '#374151', background: '#F3F4F6' };
-  return <View style={{ alignSelf: 'flex-start', backgroundColor: item.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-    <Text style={{ color: item.color, fontWeight: '700', fontSize: 12 }}>{item.label}</Text>
-  </View>;
+  const item = statusDesign[status];
+  return <Pill label={item?.label ?? status} tone={item?.tone} icon={item?.icon} />;
 }

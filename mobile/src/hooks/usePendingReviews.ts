@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { usePathname } from 'expo-router';
-import { requestJson } from '@/api/http';
+import { API_URL, requestJson } from '@/api/http';
 import { onDataRefresh } from '@/utils/refreshEvents';
 
 export function usePendingReviews(token:string|null,admin:boolean){
@@ -18,7 +18,7 @@ export function usePendingReviews(token:string|null,admin:boolean){
       if(!active||busy||AppState.currentState==='background'||AppState.currentState==='inactive')return;
       busy=true;
       try{
-        const result:{ids:number[];count:number}=await requestJson(`${process.env.EXPO_PUBLIC_API_URL}/expenses/pending-review`,{headers:{Authorization:`Bearer ${token}`}});
+        const result:{ids:number[];count:number}=await requestJson(`${API_URL}/expenses/pending-review`,{headers:{Authorization:`Bearer ${token}`}});
         if(!active)return;
         const added=result.ids.filter(id=>!known.current?.has(id)).length;
         setCount(result.count);

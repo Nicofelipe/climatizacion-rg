@@ -5,6 +5,7 @@ import {
     deleteExpenseController,
     getExpenseByIdController,
     getExpensesController,
+    searchExpensesController,
     updateExpenseController
 } from '../controllers/expense.controller';
 import { authenticateToken } from '../middlewares/auth.middleware';
@@ -23,6 +24,7 @@ const uploadLimit=fixedWindowLimit(30,300000,req=>{
 });
 
 router.get('/', authenticateToken, getExpensesController);
+router.get('/search', authenticateToken, searchExpensesController);
 router.get('/pending-review',authenticateToken,requireRole('ADMIN'),async(req:AuthenticatedRequest,res)=>{
   res.setHeader('Cache-Control','no-store');
   try{const rows=await getPendingReviews(req.user!.companyId,req.user!.userId);res.json({ids:rows.map(row=>row.Id),count:rows.length});}
